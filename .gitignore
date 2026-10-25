@@ -1,0 +1,41 @@
+# OS
+.DS_Store
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# Cloudflare
+.wrangler/
+
+# Local deployment settings (real hostnames, ids, ARNs); copy from the *.example files
+infra/deploy.local.json
+infra/worker/wrangler.jsonc
+
+# Terraform / CDK / build output
+.terraform/
+*.tfstate
+*.tfstate.*
+cdk.out/
+dist/
+build/
+
+# Logs
+*.log

@@ -1,0 +1,13 @@
+// Copy to wrangler.jsonc (git-ignored), fill in the two placeholders, then run: npx wrangler deploy
+{
+  "name": "harness-proxy-edge",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // Only the custom domain, which sits behind Cloudflare Access. A workers.dev URL would not.
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "<your-hostname>", "custom_domain": true }],
+  // The Lambda function URL origin, from the stack's FunctionUrl output (no trailing slash).
+  // Keeping it here means a plain `wrangler deploy` does not drop it.
+  "vars": { "ORIGIN": "https://<function-url-host>" }
+}
