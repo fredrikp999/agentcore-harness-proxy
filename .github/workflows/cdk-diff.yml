@@ -23,6 +23,11 @@ jobs:
           cache-dependency-path: aws/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      - name: Show OIDC claims (temporary)
+        run: |
+          curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=sts.amazonaws.com" | jq -r .value \
+            | cut -d. -f2 | tr '_-' '/+' | { read -r p; echo "${p}=="; } | base64 -d 2>/dev/null | jq '{sub, aud, iss, repository, job_workflow_ref}'
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_DIFF_ROLE_ARN }}
