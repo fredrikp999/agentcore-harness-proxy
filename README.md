@@ -76,6 +76,23 @@ uv run invoke_proxy.py --session-id my-test-session-0000000000000000001 "Remembe
 Run it from the repository root. See [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)
 if it returns an error.
 
+### Finding the values for `.env`
+
+`.env.example` has the same notes next to each setting.
+
+| Setting | Where to find it |
+|---|---|
+| `HARNESS_ARN` | In the AWS console, open Amazon Bedrock AgentCore, find your harness and copy its ARN. It looks like `arn:aws:bedrock-agentcore:<region>:<account-id>:harness/<harness-id>`. Your account id is `aws sts get-caller-identity --query Account --output text`. Only `invoke_harness.py` uses it. |
+| `PROXY_URL` | The public hostname you gave the Cloudflare Access application and the Worker's custom domain (the `routes` pattern in `infra/worker/wrangler.jsonc`), as `https://<hostname>/`. |
+| `CF_ACCESS_CLIENT_ID` | Cloudflare Zero Trust, then Access controls, then Service credentials, then Service Tokens. Create a token and copy its **Client ID**. It ends in `.access`. |
+| `CF_ACCESS_CLIENT_SECRET` | Shown only once, when you create the token. If you lost it, use **Refresh** on the token to get a new one, and update `.env`. |
+
+The service token only works if a policy on the Access application has the action
+**Service Auth** and includes that token. A token inside an **Allow** policy is
+rejected. Treat the client secret like a password: keep it in a password manager,
+keep `.env` at mode `600`, and never commit or paste it into chat. Create one
+token per client so you can revoke one without breaking the others.
+
 ## The harness
 
 The harness ARN is not stored in this repository. It lives in your local `.env`
