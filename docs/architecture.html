@@ -1,8 +1,14 @@
-<title>Harness Proxy Architecture</title>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Proxy Architecture</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
-  /* Layout: one wide left-to-right flow figure across two trust zones, a short comparison figure, then a table of where a request can be stopped. */
+  /* Layout: one wide flow figure (browser and script entering through Cloudflare, Lambda, harness, MCP servers),
+     a short comparison figure for the direct call, a status table, then a long-form detail chapter. */
   :root {
     --bg: #f6f7f8;
     --fg: #1b2127;
@@ -13,6 +19,8 @@
     --cf-line: #c9822b;
     --aws: #e6eff8;
     --aws-line: #3d7ab8;
+    --ext: #f0edf7;
+    --ext-line: #7a64b0;
     --accent: #0b7a6b;
     --accent-soft: #dff1ee;
     --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -29,6 +37,8 @@
       --cf-line: #d99a4e;
       --aws: #162331;
       --aws-line: #6aa5dc;
+      --ext: #1f1b2b;
+      --ext-line: #a592d6;
       --accent: #4fc9b6;
       --accent-soft: #15302c;
       color-scheme: dark;
@@ -44,12 +54,15 @@
     --cf-line: #d99a4e;
     --aws: #162331;
     --aws-line: #6aa5dc;
+    --ext: #1f1b2b;
+    --ext-line: #a592d6;
     --accent: #4fc9b6;
     --accent-soft: #15302c;
     color-scheme: dark;
   }
 
   body {
+    margin: 0;
     background: var(--bg);
     color: var(--fg);
     font-family: var(--font-body);
@@ -62,118 +75,173 @@
   main { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
   h1 { font-size: 28px; font-weight: 600; margin: 0 0 8px; text-wrap: balance; letter-spacing: -0.01em; }
   h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 12px; }
-  p { margin: 0; max-width: 65ch; }
+  h3 { font-size: 18px; font-weight: 600; margin: 0 0 10px; letter-spacing: -0.005em; }
+  p { margin: 0; max-width: 70ch; }
+  p + p { margin-top: 10px; }
   .lede { color: var(--muted); }
   code, .mono { font-family: var(--font-mono); font-size: 0.9em; }
 
   figure { margin: 0; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .scroll { overflow-x: auto; border: 1px solid color-mix(in srgb, var(--line) 40%, transparent); border-radius: 6px; background: var(--surface); }
-  .scroll svg { display: block; min-width: 760px; width: 100%; height: auto; }
-  figcaption { color: var(--muted); font-size: 14px; max-width: 75ch; }
+  .scroll svg { display: block; min-width: 780px; width: 100%; height: auto; }
+  figcaption { color: var(--muted); font-size: 14px; max-width: 80ch; }
 
   /* SVG parts, styled here so the drawing stays self-contained */
   svg text { fill: currentColor; font-family: var(--font-body); font-size: 12.5px; }
   svg .t-title { font-weight: 600; font-size: 13.5px; }
+  svg .t-small { font-size: 12px; }
   svg .t-sub { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
   svg .t-zone { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; }
   svg .t-edge { font-family: var(--font-mono); font-size: 11px; fill: var(--muted); }
   svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1.25; }
+  svg .box-inner { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
   svg .box-key { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+  svg .box-ext { fill: var(--ext); stroke: var(--ext-line); stroke-width: 1.25; stroke-dasharray: 6 4; }
   svg .zone-cf { fill: var(--cf); stroke: var(--cf-line); stroke-width: 1.25; stroke-dasharray: 6 4; }
   svg .zone-aws { fill: var(--aws); stroke: var(--aws-line); stroke-width: 1.25; stroke-dasharray: 6 4; }
   svg .tz-cf { fill: var(--cf-line); }
   svg .tz-aws { fill: var(--aws-line); }
+  svg .tz-ext { fill: var(--ext-line); }
   svg .edge { fill: none; stroke: var(--line); stroke-width: 1.5; }
   svg .edge-back { fill: none; stroke: var(--line); stroke-width: 1.5; stroke-dasharray: 5 4; }
   svg .edge-key { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 2 4; }
+  svg .edge-ext { fill: none; stroke: var(--ext-line); stroke-width: 1.5; }
   svg .arrow-fill { fill: var(--line); }
   svg .arrow-key { fill: var(--accent); }
+  svg .arrow-ext { fill: var(--ext-line); }
 
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   .table-wrap { overflow-x: auto; }
   th, td { text-align: left; vertical-align: top; padding: 10px 14px 10px 0; border-bottom: 1px solid color-mix(in srgb, var(--line) 35%, transparent); }
   th { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); white-space: nowrap; }
   td:first-child { white-space: nowrap; font-weight: 500; }
-  td { min-width: 0; }
   .status { font-family: var(--font-mono); font-size: 13px; }
-</style>
 
+  /* Detail chapter */
+  .chapter { display: flex; flex-direction: column; gap: 32px; border-top: 1px solid color-mix(in srgb, var(--line) 40%, transparent); padding-top: 32px; }
+  .chapter > header p { margin-top: 6px; }
+  .chapter section { display: flex; flex-direction: column; gap: 10px; }
+  ol.steps { margin: 0; padding-left: 0; list-style: none; counter-reset: step; max-width: 80ch; display: flex; flex-direction: column; gap: 10px; }
+  ol.steps li { counter-increment: step; display: grid; grid-template-columns: 28px 1fr; gap: 10px; }
+  ol.steps li::before { content: counter(step); font-family: var(--font-mono); font-size: 12px; font-weight: 500; color: var(--accent); background: var(--accent-soft); border-radius: 50%; width: 24px; height: 24px; display: grid; place-items: center; margin-top: 1px; }
+  ul.points { margin: 0; padding-left: 20px; max-width: 80ch; display: flex; flex-direction: column; gap: 6px; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid color-mix(in srgb, var(--line) 40%, transparent); border-radius: 6px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+  .card h4 { margin: 0; font-size: 15px; font-weight: 600; }
+  .card p { font-size: 14px; }
+  .card .tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+</style>
+</head>
+<body>
 <main>
   <header>
-    <h1>Harness Proxy Architecture</h1>
-    <p class="lede">A client reaches the AgentCore harness in eu-west-1 through Cloudflare Access and a streaming Lambda. The Lambda holds the only AWS permission, so callers never hold AWS keys.</p>
+    <h1>Agent Proxy Architecture</h1>
+    <p class="lede">A browser or a script reaches the AgentCore harness in eu-west-1 through Cloudflare Access, an edge Worker and a streaming Lambda. The Lambda holds the only AWS permission, so callers never hold AWS keys.</p>
   </header>
 
   <figure>
-    <h2>Request path</h2>
+    <h2>Request path: browser and curl</h2>
     <div class="scroll">
-      <svg viewBox="0 0 1000 350" role="img" aria-label="A request crosses Cloudflare, where Access checks the caller and adds a signed JWT, then reaches a Lambda in AWS eu-west-1 that verifies the JWT against Cloudflare's keys and calls InvokeHarness. The reply streams back along the same route.">
+      <svg viewBox="0 0 1000 400" role="img" aria-label="Two clients, a browser running the chat UI and curl or a script with a service token, both pass Cloudflare Access, which adds a signed JWT. The Worker serves the chat UI to the browser and forwards /api requests to a Lambda in AWS eu-west-1. The Lambda verifies the JWT against Cloudflare's keys and calls InvokeHarness. The harness runs the agent with its tools and calls two external MCP servers. The reply streams back to the client.">
         <defs>
           <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="arrow-fill" d="M0 0 L10 5 L0 10 z"/></marker>
           <marker id="ahk" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="arrow-key" d="M0 0 L10 5 L0 10 z"/></marker>
+          <marker id="ahx" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="arrow-ext" d="M0 0 L10 5 L0 10 z"/></marker>
         </defs>
 
-        <!-- trust zones -->
-        <rect class="zone-cf" x="190" y="70" width="340" height="215" rx="8"/>
-        <text class="t-zone tz-cf" x="206" y="92">CLOUDFLARE</text>
-        <text class="t-sub" x="206" y="108">your hostname (proxied)</text>
+        <!-- trust zones; labels at the bottom keep the top free for the return paths -->
+        <rect class="zone-cf" x="175" y="70" width="360" height="270" rx="8"/>
+        <text class="t-zone tz-cf" x="191" y="328">CLOUDFLARE · your hostname</text>
 
-        <rect class="zone-aws" x="570" y="70" width="410" height="215" rx="8"/>
-        <text class="t-zone tz-aws" x="586" y="92">AWS eu-west-1</text>
+        <rect class="zone-aws" x="565" y="70" width="415" height="270" rx="8"/>
+        <text class="t-zone tz-aws" x="581" y="328">AWS eu-west-1</text>
 
-        <!-- client -->
-        <rect class="box" x="20" y="130" width="110" height="70" rx="6"/>
-        <text class="t-title" x="75" y="158" text-anchor="middle">Client</text>
-        <text class="t-sub" x="75" y="176" text-anchor="middle">curl / app</text>
-        <text class="t-sub" x="75" y="192" text-anchor="middle">service token</text>
+        <!-- external MCP servers -->
+        <rect class="box-ext" x="770" y="6" width="210" height="46" rx="6"/>
+        <text class="t-zone tz-ext" x="784" y="24">PUBLIC MCP SERVERS</text>
+        <text class="t-sub" x="784" y="41">AWS Knowledge · DeepWiki</text>
+
+        <!-- clients -->
+        <rect class="box" x="16" y="100" width="134" height="80" rx="6"/>
+        <text class="t-title" x="83" y="124" text-anchor="middle">Browser</text>
+        <text class="t-sub" x="83" y="142" text-anchor="middle">chat UI</text>
+        <text class="t-sub" x="83" y="157" text-anchor="middle">Access login</text>
+        <text class="t-sub" x="83" y="171" text-anchor="middle">(email + PIN)</text>
+
+        <rect class="box" x="16" y="215" width="134" height="80" rx="6"/>
+        <text class="t-title" x="83" y="239" text-anchor="middle">curl / script</text>
+        <text class="t-sub" x="83" y="257" text-anchor="middle">invoke_proxy.py</text>
+        <text class="t-sub" x="83" y="272" text-anchor="middle">service token</text>
+        <text class="t-sub" x="83" y="286" text-anchor="middle">in two headers</text>
 
         <!-- access -->
-        <rect class="box" x="215" y="130" width="110" height="70" rx="6"/>
-        <text class="t-title" x="270" y="158" text-anchor="middle">Access</text>
-        <text class="t-sub" x="270" y="176" text-anchor="middle">checks policy</text>
-        <text class="t-sub" x="270" y="192" text-anchor="middle">signs a JWT</text>
+        <rect class="box" x="200" y="160" width="120" height="80" rx="6"/>
+        <text class="t-title" x="260" y="186" text-anchor="middle">Access</text>
+        <text class="t-sub" x="260" y="205" text-anchor="middle">checks policy</text>
+        <text class="t-sub" x="260" y="221" text-anchor="middle">signs a JWT</text>
 
-        <!-- origin rule -->
-        <rect class="box" x="395" y="130" width="110" height="70" rx="6"/>
-        <text class="t-title" x="450" y="158" text-anchor="middle">Worker</text>
-        <text class="t-sub" x="450" y="176" text-anchor="middle">fetch() sets Host</text>
-        <text class="t-sub" x="450" y="192" text-anchor="middle">to Lambda URL</text>
+        <!-- worker with its two jobs -->
+        <rect class="box" x="370" y="96" width="145" height="200" rx="6"/>
+        <text class="t-title" x="442" y="118" text-anchor="middle">Worker</text>
+        <rect class="box-inner" x="382" y="130" width="121" height="62" rx="4"/>
+        <text class="t-small" x="442" y="152" text-anchor="middle">serves the UI</text>
+        <text class="t-sub" x="442" y="168" text-anchor="middle">GET /, /assets</text>
+        <text class="t-sub" x="442" y="182" text-anchor="middle">static files</text>
+        <rect class="box-inner" x="382" y="210" width="121" height="72" rx="4"/>
+        <text class="t-small" x="442" y="232" text-anchor="middle">forwards /api/*</text>
+        <text class="t-sub" x="442" y="248" text-anchor="middle">fetch() sets Host</text>
+        <text class="t-sub" x="442" y="262" text-anchor="middle">drops token,</text>
+        <text class="t-sub" x="442" y="275" text-anchor="middle">cookie headers</text>
 
         <!-- lambda -->
-        <rect class="box-key" x="590" y="110" width="170" height="150" rx="6"/>
-        <text class="t-title" x="675" y="136" text-anchor="middle">Lambda</text>
-        <text class="t-sub" x="675" y="153" text-anchor="middle">function URL, no IAM auth</text>
-        <text x="606" y="181">1  verify Access JWT</text>
-        <text x="606" y="200">2  validate request body</text>
-        <text x="606" y="219">3  InvokeHarness, stream</text>
-        <text class="t-sub" x="675" y="245" text-anchor="middle">own IAM role, no stored keys</text>
+        <rect class="box-key" x="585" y="120" width="170" height="160" rx="6"/>
+        <text class="t-title" x="670" y="144" text-anchor="middle">Lambda</text>
+        <text class="t-sub" x="670" y="161" text-anchor="middle">function URL, no IAM auth</text>
+        <text x="600" y="189">1  verify Access JWT</text>
+        <text x="600" y="208">2  validate the body</text>
+        <text x="600" y="227">3  InvokeHarness</text>
+        <text x="600" y="246">4  stream text back</text>
+        <text class="t-sub" x="670" y="268" text-anchor="middle">own IAM role, no keys</text>
 
         <!-- harness -->
-        <rect class="box" x="820" y="130" width="140" height="70" rx="6"/>
-        <text class="t-title" x="890" y="154" text-anchor="middle">AgentCore harness</text>
-        <text class="t-sub" x="890" y="172" text-anchor="middle">your harness</text>
-        <text class="t-sub" x="890" y="188" text-anchor="middle">Code Interpreter tool</text>
+        <rect class="box" x="795" y="100" width="170" height="200" rx="6"/>
+        <text class="t-title" x="880" y="124" text-anchor="middle">AgentCore harness</text>
+        <text class="t-sub" x="880" y="141" text-anchor="middle">defined in agent/</text>
+        <text class="t-small" x="810" y="168">model (Bedrock)</text>
+        <text class="t-small" x="810" y="190">Code Interpreter</text>
+        <text class="t-small" x="810" y="212">MCP: aws_docs</text>
+        <text class="t-small" x="810" y="234">MCP: deepwiki</text>
+        <text class="t-small" x="810" y="256">shell, file_operations</text>
+        <text class="t-sub" x="880" y="286" text-anchor="middle">one microVM per session</text>
 
         <!-- forward edges -->
-        <line class="edge" x1="130" y1="165" x2="213" y2="165" marker-end="url(#ah)"/>
-        <text class="t-edge" x="171" y="157" text-anchor="middle">POST</text>
-        <line class="edge" x1="325" y1="165" x2="393" y2="165" marker-end="url(#ah)"/>
-        <text class="t-edge" x="359" y="157" text-anchor="middle">+ JWT</text>
-        <line class="edge" x1="505" y1="165" x2="588" y2="165" marker-end="url(#ah)"/>
-        <text class="t-edge" x="546" y="157" text-anchor="middle">HTTPS</text>
-        <line class="edge" x1="760" y1="165" x2="818" y2="165" marker-end="url(#ah)"/>
-        <text class="t-edge" x="789" y="157" text-anchor="middle">SigV4</text>
+        <line class="edge" x1="150" y1="150" x2="198" y2="185" marker-end="url(#ah)"/>
+        <line class="edge" x1="150" y1="255" x2="198" y2="217" marker-end="url(#ah)"/>
+        <line class="edge" x1="320" y1="200" x2="368" y2="200" marker-end="url(#ah)"/>
+        <text class="t-edge" x="344" y="192" text-anchor="middle">+JWT</text>
+        <line class="edge" x1="503" y1="246" x2="583" y2="246" marker-end="url(#ah)"/>
+        <text class="t-edge" x="543" y="238" text-anchor="middle">HTTPS</text>
+        <line class="edge" x1="755" y1="200" x2="793" y2="200" marker-end="url(#ah)"/>
+        <text class="t-edge" x="774" y="192" text-anchor="middle">SigV4</text>
+
+        <!-- harness to MCP servers -->
+        <line class="edge-ext" x1="880" y1="100" x2="880" y2="54" marker-end="url(#ahx)"/>
+        <text class="t-edge" x="874" y="82" text-anchor="end">MCP over HTTPS</text>
 
         <!-- JWKS lookup back to Cloudflare -->
-        <path class="edge-key" d="M675 110 V42 H360 V68" marker-end="url(#ahk)"/>
-        <text class="t-edge" x="520" y="34" text-anchor="middle">fetch team keys (JWKS) to check the JWT signature</text>
+        <path class="edge-key" d="M670 120 V34 H260 V158" marker-end="url(#ahk)"/>
+        <text class="t-edge" x="465" y="26" text-anchor="middle">fetch team keys (JWKS) to check the JWT signature</text>
+
+        <!-- UI files back to the browser -->
+        <path class="edge-back" d="M442 96 V62 H83 V98" marker-end="url(#ah)"/>
+        <text class="t-edge" x="262" y="56" text-anchor="middle">UI page and assets</text>
 
         <!-- reply -->
-        <path class="edge-back" d="M890 200 V318 H75 V202" marker-end="url(#ah)"/>
-        <text class="t-edge" x="480" y="310" text-anchor="middle">reply streams back as text/plain, with an x-session-id header</text>
+        <path class="edge-back" d="M880 300 V370 H83 V297" marker-end="url(#ah)"/>
+        <text class="t-edge" x="480" y="362" text-anchor="middle">reply streams back as text/plain, with an x-session-id header (to whichever client asked)</text>
       </svg>
     </div>
-    <figcaption>Cloudflare Access is the gate. The function URL itself is public, so the Lambda re-checks the JWT on every request and answers 401 without a valid one. The dotted line is the one call from the Lambda back out to Cloudflare. The dashed line is the reply.</figcaption>
+    <figcaption>Both clients pass the same gate. The browser signs in to Access once and its cookie is turned into a JWT; a script sends a service token in two headers and Access turns that into a JWT too. The Worker answers page requests itself and forwards only <code>/api/*</code>. The function URL is public, so the Lambda re-checks the JWT on every request. Dotted: the Lambda's one call back out to Cloudflare. Dashed: replies.</figcaption>
   </figure>
 
   <figure>
@@ -181,22 +249,22 @@
     <div class="scroll">
       <svg viewBox="0 0 1000 150" role="img" aria-label="The clients/invoke_harness.py script calls InvokeHarness directly with the caller's own AWS credentials, with no Cloudflare or Lambda in between.">
         <rect class="box" x="20" y="40" width="190" height="70" rx="6"/>
-        <text class="t-title" x="115" y="68" text-anchor="middle">invoke_harness.py</text>
-        <text class="t-sub" x="115" y="86" text-anchor="middle">local script</text>
-        <text class="t-sub" x="115" y="102" text-anchor="middle">your AWS credentials</text>
+        <text class="t-title" x="115" y="66" text-anchor="middle">invoke_harness.py</text>
+        <text class="t-sub" x="115" y="84" text-anchor="middle">clients/, local script</text>
+        <text class="t-sub" x="115" y="100" text-anchor="middle">your AWS credentials</text>
 
         <rect class="zone-aws" x="560" y="20" width="420" height="110" rx="8"/>
         <text class="t-zone tz-aws" x="576" y="42">AWS (region read from the ARN)</text>
         <rect class="box" x="820" y="55" width="140" height="55" rx="6"/>
         <text class="t-title" x="890" y="79" text-anchor="middle">AgentCore harness</text>
-        <text class="t-sub" x="890" y="97" text-anchor="middle">--harness-arn</text>
+        <text class="t-sub" x="890" y="97" text-anchor="middle">HARNESS_ARN</text>
 
         <line class="edge" x1="210" y1="75" x2="818" y2="82" marker-end="url(#ah)"/>
         <text class="t-edge" x="480" y="64" text-anchor="middle">InvokeHarness, signed with SigV4</text>
-        <text class="t-edge" x="480" y="106" text-anchor="middle">no Access, no Lambda, no JWT</text>
+        <text class="t-edge" x="480" y="106" text-anchor="middle">no Access, no Worker, no Lambda, no JWT</text>
       </svg>
     </div>
-    <figcaption>The script needs AWS credentials on the machine running it. The proxy path replaces them with a Cloudflare service token or login, and the Lambda's role makes the AWS call.</figcaption>
+    <figcaption>The script needs AWS credentials on the machine running it (<code>aws login</code> works). The proxy path replaces them with a Cloudflare login or service token, and the Lambda's role makes the AWS call.</figcaption>
   </figure>
 
   <section>
@@ -205,14 +273,113 @@
       <table>
         <thead><tr><th>Layer</th><th>Status</th><th>Reason</th></tr></thead>
         <tbody>
-          <tr><td>Cloudflare Access</td><td class="status">login / 403</td><td>No Allow policy or service token matches. The request never reaches AWS.</td></tr>
-          <tr><td>Lambda</td><td class="status">401</td><td>Missing, expired or wrongly signed <code>Cf-Access-Jwt-Assertion</code>, or the wrong AUD.</td></tr>
-          <tr><td>Worker / Lambda</td><td class="status">404</td><td>Not <code>POST /api/chat</code> or <code>GET /api/harnesses</code>. The Worker serves the web UI for other paths.</td></tr>
+          <tr><td>Cloudflare Access</td><td class="status">login / 403</td><td>No Allow policy or service token matches. The request never reaches AWS. In the web UI an expired Access session shows "Your Cloudflare Access session has expired" with a sign-in button.</td></tr>
+          <tr><td>Worker</td><td class="status">404</td><td>A non-API path with no matching UI file. The Worker's own 404 is plain text.</td></tr>
           <tr><td>Worker</td><td class="status">500</td><td><code>proxy misconfigured</code>: <code>vars.ORIGIN</code> in <code>wrangler.jsonc</code> is missing or not a URL. The request never reaches AWS.</td></tr>
+          <tr><td>Lambda</td><td class="status">401</td><td>Missing, expired or wrongly signed <code>Cf-Access-Jwt-Assertion</code>, the wrong AUD, or a token with no identity.</td></tr>
+          <tr><td>Lambda</td><td class="status">404</td><td>Not <code>POST /api/chat</code> or <code>GET /api/harnesses</code>. A JSON 404 comes from the Lambda.</td></tr>
           <tr><td>Lambda</td><td class="status">400</td><td>Body is not JSON, <code>message</code> is empty or over 20,000 characters, <code>harness</code> is unknown, or <code>session_id</code> is under 33 characters.</td></tr>
           <tr><td>AgentCore</td><td class="status">502</td><td><code>InvokeHarness</code> failed before streaming started. After that, a failure appends <code>[error: stream interrupted]</code> to the reply.</td></tr>
         </tbody>
       </table>
     </div>
   </section>
+
+  <article class="chapter">
+    <header>
+      <h2>In more detail</h2>
+      <h3>How the pieces fit together</h3>
+      <p class="lede">What each client does, what happens to one chat message from start to finish, what the agent can reach, and which part of the repository deploys which box.</p>
+    </header>
+
+    <section>
+      <h3>Two ways in</h3>
+      <div class="pair">
+        <div class="card">
+          <span class="tag">cloudflare/web · browser</span>
+          <h4>Web chat UI</h4>
+          <p>You open <code>https://&lt;your-hostname&gt;/</code> and sign in through an Access <strong>Allow</strong> policy, for example email with a one-time PIN. Access sets a <code>CF_Authorization</code> cookie and, on every request, adds the signed JWT as the <code>Cf-Access-Jwt-Assertion</code> header.</p>
+          <p>The page loads the harness list from <code>GET /api/harnesses</code> and sends each message to <code>POST /api/chat</code>. Each chat is one harness session; its id (<code>web-&lt;uuid&gt;</code>) is the session id. Chats live only in the browser's local storage.</p>
+        </div>
+        <div class="card">
+          <span class="tag">clients/invoke_proxy.py · curl</span>
+          <h4>Scripts and curl</h4>
+          <p>The caller sends a service token as <code>CF-Access-Client-Id</code> and <code>CF-Access-Client-Secret</code>. Access accepts it only through a separate <strong>Service Auth</strong> policy, and then adds the same kind of JWT header.</p>
+          <p>The request body is JSON (<code>message</code>, optional <code>session_id</code>, <code>harness</code>, <code>max_tokens</code>). The reply streams as plain text; the session id comes back in <code>x-session-id</code>, so the next call can continue the conversation.</p>
+        </div>
+      </div>
+      <p>Either way, the identity the Lambda sees is the first non-empty of the JWT's <code>email</code> (a person), <code>common_name</code> (a service token) or <code>sub</code>. A service token's <code>sub</code> is an empty string, which is why the order matters.</p>
+    </section>
+
+    <section>
+      <h3>One chat message, step by step</h3>
+      <ol class="steps">
+        <li><span><strong>Access.</strong> Cloudflare checks the cookie or the service token against the application's policies. Without a match the browser is sent to the login page and a script gets 403; nothing reaches AWS.</span></li>
+        <li><span><strong>Worker.</strong> <code>/api/*</code> runs the Worker's code first. It removes the service token headers and the browser cookie (the JWT header already carries the identity) and calls the Lambda function URL with <code>fetch()</code>, which sets the Host header the function URL requires. Any other path is answered from the static UI files.</span></li>
+        <li><span><strong>JWT check.</strong> The Lambda verifies <code>Cf-Access-Jwt-Assertion</code> against the team's public keys at <code>https://&lt;team&gt;.cloudflareaccess.com/cdn-cgi/access/certs</code>, checking the signature, the issuer and the application's AUD tag. This is the real lock: the function URL itself is public.</span></li>
+        <li><span><strong>Validation.</strong> The body must be JSON with a 1 to 20,000 character <code>message</code>. <code>session_id</code> must be at least 33 characters of <code>A-Za-z0-9_-</code> (a new one is generated if absent). <code>max_tokens</code> defaults to 1000 and is capped at 8000. <code>harness</code> is a name that the Lambda maps to an ARN; callers never see or send ARNs.</span></li>
+        <li><span><strong>InvokeHarness.</strong> The Lambda calls the harness with its own role, passing only the message, session id and token limit. Callers cannot override the model, prompt, tools or skills, even though the API would allow it.</span></li>
+        <li><span><strong>The agent loop.</strong> AgentCore starts or resumes the session's microVM and runs the loop: the model reasons, calls tools (Code Interpreter, the MCP servers, the built-in shell and file tools), reads the results and repeats, up to 75 iterations or 1 hour.</span></li>
+        <li><span><strong>Streaming back.</strong> The Lambda writes each text delta to the response as it arrives (<code>text/plain</code>, function URL in response-streaming mode). If the harness fails mid-reply, the stream ends with <code>[error: ...]</code>, which the UI shows as an error.</span></li>
+      </ol>
+    </section>
+
+    <section>
+      <h3>What the agent can reach</h3>
+      <p>The agent is defined in <code>agent/agent.ts</code>; the stack in <code>aws/</code> adds the IAM each enabled tool needs. Everything a tool sends leaves through that tool, so it is listed here with where the data goes.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tool</th><th>Runs where</th><th>Data goes to</th></tr></thead>
+          <tbody>
+            <tr><td>Model</td><td>Amazon Bedrock, through an <code>eu.</code> inference profile</td><td>AWS, EU regions</td></tr>
+            <tr><td>Code Interpreter</td><td>AWS-managed sandbox (<code>aws.codeinterpreter.v1</code>)</td><td>AWS; the role may only use the AWS-managed interpreter</td></tr>
+            <tr><td>aws_docs (MCP)</td><td><code>knowledge-mcp.global.api.aws</code></td><td>AWS: public documentation search, read-only</td></tr>
+            <tr><td>deepwiki (MCP)</td><td><code>mcp.deepwiki.com</code></td><td>Cognition: questions about public GitHub repositories</td></tr>
+            <tr><td>shell, file_operations</td><td>Built in, inside the session's microVM</td><td>The session's own files; the microVM has public network access, so shell commands can reach the internet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h3>Sessions and state</h3>
+      <ul class="points">
+        <li>A session is identified by the id the client sends. The harness keeps the conversation inside that session's microVM, trimmed to the last 150 messages.</li>
+        <li>A session ends after 15 minutes idle or 8 hours in total. After that the same id starts afresh and the agent no longer remembers earlier messages; the web UI warns when you return to such a chat.</li>
+        <li>There is no long-term memory yet (AgentCore Memory is disabled), so nothing carries over between sessions.</li>
+        <li>The web UI stores chat history in the browser only. The proxy and the Lambda store nothing; the Lambda logs errors to CloudWatch, kept for one month.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>Security boundaries</h3>
+      <ul class="points">
+        <li><strong>No AWS keys outside AWS.</strong> Only the Lambda's role can call <code>InvokeHarness</code> and <code>InvokeAgentRuntime</code>, and only on the configured harness ARNs.</li>
+        <li><strong>Two checks of one identity.</strong> Access decides who may enter; the Lambda verifies Access's signature, so a request that bypasses Cloudflare and hits the public function URL gets 401.</li>
+        <li><strong>Secrets stop at the edge.</strong> The Worker drops the service token headers and the browser cookie before calling AWS.</li>
+        <li><strong>A narrow request shape.</strong> The Lambda forwards four fields. Tool, model and skill overrides from callers never reach the harness.</li>
+        <li><strong>Least-privilege harness role.</strong> The execution role covers the configured model and, per enabled tool, only that tool's actions on the AWS-managed resource.</li>
+        <li><strong>Values that describe your setup stay local.</strong> Hostname, Access AUD, account id and tokens live in git-ignored files: <code>.env</code>, <code>aws/deploy.local.json</code>, <code>cloudflare/worker/wrangler.jsonc</code>.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h3>Which folder deploys which box</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Box</th><th>Defined in</th><th>Deployed with</th></tr></thead>
+          <tbody>
+            <tr><td>Access application</td><td>Cloudflare dashboard (not yet in code)</td><td>by hand, once</td></tr>
+            <tr><td>Worker and chat UI</td><td><code>cloudflare/worker</code>, <code>cloudflare/web</code></td><td><code>npm run build</code>, then <code>npx wrangler deploy</code></td></tr>
+            <tr><td>Lambda proxy</td><td><code>aws/lambda/handler.ts</code>, <code>aws/lib/proxy-stack.ts</code></td><td><code>npx cdk deploy HarnessProxy</code></td></tr>
+            <tr><td>Harness and its role</td><td><code>agent/agent.ts</code>, <code>agent/system-prompt.md</code>, <code>aws/lib/agent-harness-stack.ts</code></td><td><code>npx cdk deploy AgentHarness</code></td></tr>
+            <tr><td>Clients</td><td><code>clients/</code></td><td>run locally with <code>uv run</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Deploy order for a fresh setup: the Access application (for its AUD and team domain), then <code>AgentHarness</code> and <code>HarnessProxy</code> (<code>npx cdk deploy --all</code>), then the Worker with the Lambda's <code>FunctionUrl</code> as <code>ORIGIN</code>. After that, agent changes only need <code>npx cdk deploy AgentHarness</code>; the harness ARN, and so the proxy, stays the same.</p>
+    </section>
+  </article>
 </main>
+</body>
+</html>
