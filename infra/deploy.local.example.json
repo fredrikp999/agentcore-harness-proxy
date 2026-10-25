@@ -1,6 +1,4 @@
 {
   "accessTeamDomain": "<team>.cloudflareaccess.com",
-  "accessAud": "<application-aud-tag>",
-  "harnessName": "agent_harness",
-  "modelId": "eu.amazon.nova-micro-v1:0"
+  "accessAud": "<application-aud-tag>"
 }

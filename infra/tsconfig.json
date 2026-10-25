@@ -10,5 +10,5 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["bin", "lib", "lambda"]
+  "include": ["bin", "lib", "lambda", "harness"]
 }

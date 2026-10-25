@@ -15,7 +15,8 @@ You need:
   and set `HARNESS_ARN`
 
 There is nothing to install by hand. The script declares its own dependencies
-(`boto3>=1.42`, the first versions with the harness API), and `uv run` creates a
+(`boto3[crt]>=1.42`: 1.42 is the first version with the harness API, and `crt`
+is needed for `aws login` credentials), and `uv run` creates a
 cached environment on first use.
 
 ### AWS credentials
@@ -135,19 +136,29 @@ locally, but without the `/api` routes.
 ## The harness
 
 The harness is defined in this repository and deployed as the `AgentHarness`
-CDK stack (`infra/lib/agent-harness-stack.ts`). It runs in eu-west-1, has no
-memory, and its runtime uses a `PUBLIC` network. Its one added tool is the
-AWS-managed **Code Interpreter**, which runs Python in a sandbox, so the agent
-can calculate, analyse data and produce files instead of guessing.
+CDK stack. It runs in eu-west-1, has no memory, and its runtime uses a `PUBLIC`
+network. Its tools:
 
+- **Code Interpreter** (AWS-managed): runs Python in a sandbox, so the agent can
+  calculate, analyse data and produce files instead of guessing.
+- **`aws_docs`**, the [AWS Knowledge MCP server](https://knowledge-mcp.global.api.aws):
+  searches and reads the AWS documentation and checks regional availability.
+- **`deepwiki`**, the [DeepWiki MCP server](https://mcp.deepwiki.com/mcp):
+  answers questions about public GitHub repositories.
+
+Both MCP servers are public, read-only and need no key. Questions that use them
+are sent to AWS and to Cognition (DeepWiki) respectively.
+
+- **The agent:** [`infra/harness/agent.ts`](infra/harness/agent.ts) holds the
+  name, model, tools (Code Interpreter, Browser, MCP servers), allowed tools and
+  limits. It is committed, so every change to the agent is in git history.
 - **System prompt:** [`infra/harness/system-prompt.md`](infra/harness/system-prompt.md).
-- **Model and name:** `modelId` and `harnessName` in the git-ignored
-  `infra/deploy.local.json` (defaults: `eu.amazon.nova-micro-v1:0` and
-  `agent_harness`).
+- **How AWS provides it:** `infra/lib/agent-harness-stack.ts` turns the agent
+  into the harness and its execution role, adding the IAM each enabled tool needs.
 - **ARN:** a stack output and an SSM parameter. It is not stored in the
   repository. Put it in your local `.env` as `HARNESS_ARN` for the scripts.
 
-To change the prompt or the model, edit them and run `npx cdk deploy --all` from
+To change the agent, edit those files and run `npx cdk deploy AgentHarness` from
 `infra/`. See [`infra/README.md`](infra/README.md#the-harness-stack).
 
 ## Architecture

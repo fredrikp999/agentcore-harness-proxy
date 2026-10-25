@@ -131,7 +131,7 @@ Deploys then assume those roles instead of using powerful credentials directly.
    ```sh
    cd infra
    npm install
-   cp deploy.local.example.json deploy.local.json   # team domain, AUD tag, harness settings
+   cp deploy.local.example.json deploy.local.json   # team domain and AUD tag
    npx cdk deploy --all
    ```
 

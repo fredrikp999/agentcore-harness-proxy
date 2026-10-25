@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["boto3>=1.42"]
+# dependencies = ["boto3[crt]>=1.42"]
 # ///
 """Send a message to an AgentCore harness and stream the reply.
 

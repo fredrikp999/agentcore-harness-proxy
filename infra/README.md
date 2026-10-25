@@ -42,8 +42,9 @@ out of the repository. They go in two git-ignored files, each copied from an
    ```
 
    `deploy.local.json` holds `accessTeamDomain` and `accessAud` (required), and
-   `harnessName` and `modelId` for the harness (optional). Any setting can also be
-   given as `-c key=value`, which wins over the file. You can deploy one stack
+   optionally `harnessArns`. Any setting can also be given as `-c key=value`,
+   which wins over the file. The harness itself is defined in the committed
+   `harness/agent.ts`, not here (see [The harness stack](#the-harness-stack)). You can deploy one stack
    alone with `npx cdk deploy AgentHarness` or `npx cdk deploy HarnessProxy`.
 
    The `FunctionUrl` output is the origin, e.g.
@@ -110,24 +111,40 @@ Any other path or method gets a 404.
 
 `AgentHarness` creates an IAM execution role for the harness, the harness
 (`AWS::BedrockAgentCore::Harness`) and an SSM parameter
-`/agent-harness/<harnessName>/arn` holding its ARN. The proxy reads that
+`/agent-harness/<name>/arn` holding its ARN. The proxy reads that
 parameter when it is deployed, so deploy `AgentHarness` first (`--all` does).
 An SSM parameter is used instead of a CloudFormation export because an export
 cannot change while another stack uses it, which would block replacing the
 harness.
 
-- **Change the prompt:** edit `harness/system-prompt.md` and run
-  `npx cdk deploy AgentHarness`. Review the diff first with `npx cdk diff`.
-- **Change the model:** set `modelId` in `deploy.local.json` and redeploy. The
-  role's Bedrock permission follows the model id.
-- **Rename the harness:** `harnessName` cannot change in place. CloudFormation
+The agent is defined in two committed files, and the stack derives the rest:
+
+| File | Holds |
+|---|---|
+| `harness/agent.ts` | Name, model, tools, `allowedTools` and limits. Type-checked against `AgentConfig` in the stack. |
+| `harness/system-prompt.md` | The system prompt. |
+| `lib/agent-harness-stack.ts` | How AWS provides it: the harness, the execution role and, for each enabled tool, its tool entry and IAM statement. |
+
+Secrets never go in `agent.ts`. An MCP server that needs a key should get it
+from an AgentCore Identity credential provider, added to the stack together with
+the IAM to read it.
+
+- **Change the prompt or the agent:** edit the file and run
+  `npx cdk diff AgentHarness`, then `npx cdk deploy AgentHarness`.
+- **Change the model:** set `model` in `harness/agent.ts`. The role's Bedrock
+  permission follows the model id. To try a model for one deploy without editing
+  the file, pass `-c modelId=<id>`.
+- **Add a tool:** set `codeInterpreter` or `browser` to `true`, or add
+  `{ name, url }` to `mcpServers`. The stack adds the matching IAM statement.
+  `allowedTools` (`"*"` by default) also allows the built-in `shell` and
+  `file_operations` tools.
+- **Rename the harness:** `name` cannot change in place. CloudFormation
   creates a new harness with a new ARN and deletes the old one, which ends its
   sessions. Redeploy `HarnessProxy` afterwards so it picks up the new ARN.
 - **The role** is based on the policy the AgentCore console generates, without
-  the parts for features this harness does not use (browser, file systems,
-  memory). It includes the statement for the AWS-managed code interpreter
-  (`arn:aws:bedrock-agentcore:<region>:aws:code-interpreter/*`), which the Code
-  Interpreter tool needs. If the runtime fails to start after a change, compare
+  the parts for features this harness does not use (file systems, memory). The
+  statements for the AWS-managed Code Interpreter and Browser are added only
+  when those tools are enabled. If the runtime fails to start after a change, compare
   with a console-generated policy.
 
 ### Moving from a harness created in the console
