@@ -408,8 +408,9 @@
           <thead><tr><th>Aspect</th><th>What it is</th></tr></thead>
           <tbody>
             <tr><td>Tool</td><td><code>ask_agent</code>: sends a message to the agent and returns its full reply.</td></tr>
-            <tr><td>Inputs</td><td><code>message</code> (required, up to 20,000 characters), <code>session_id</code>, <code>harness</code> (an enum of the configured names), <code>max_tokens</code> (up to 8000). The same checks as <code>/api/chat</code>.</td></tr>
+            <tr><td>Inputs</td><td><code>message</code> (required, up to 20,000 characters), <code>session_id</code>, <code>harness</code> (an enum of the configured names), <code>max_tokens</code> (up to 8000). The same checks as <code>/api/chat</code>. Plus <code>include_trace</code>, see below.</td></tr>
             <tr><td>Output</td><td><code>structuredContent</code> <code>{reply, session_id}</code>, and the same JSON as a text block for clients that only read text. Errors come back as a result with <code>isError</code>.</td></tr>
+            <tr><td>Trace</td><td>With <code>include_trace: true</code>, a <code>trace</code> list too: the agent's reasoning (its <code>&lt;thinking&gt;</code> blocks, or the model's own reasoning output), each tool call with its input, and each tool result, in order and each cut to 2,000 characters. Off by default, so callers don't pay for it in context. The reply never contains the reasoning.</td></tr>
             <tr><td>Conversation</td><td>Each call without <code>session_id</code> starts a new harness session. Passing it back continues that session, with the same 15-minute idle limit as the chat.</td></tr>
             <tr><td>Transport</td><td>One JSON-RPC message per <code>POST</code>, no <code>Mcp-Session-Id</code>. <code>tools/call</code> answers over SSE with keepalive comments; other methods answer with JSON. <code>GET</code> and <code>DELETE</code> return 405.</td></tr>
             <tr><td>Auth</td><td>A service token in <code>CF-Access-Client-Id</code> and <code>CF-Access-Client-Secret</code>. A request with an <code>Origin</code> header gets 403.</td></tr>

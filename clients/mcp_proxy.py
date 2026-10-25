@@ -9,6 +9,7 @@ Usage:
     uv run clients/mcp_proxy.py --list
     uv run clients/mcp_proxy.py "Hello, who are you?"
     uv run clients/mcp_proxy.py --session-id session-... "What did I just ask?"
+    uv run clients/mcp_proxy.py --trace "Use Python to compute 17**13"
 
 Settings come from the environment or the .env file at the repository root:
     PROXY_URL                 e.g. https://agenthelper.example.com/
@@ -90,6 +91,7 @@ def main():
     parser.add_argument("--harness", help="harness name (default: the proxy's default)")
     parser.add_argument("--session-id", help="continue a conversation (the session_id of an earlier reply)")
     parser.add_argument("--max-tokens", type=int, help="maximum output tokens")
+    parser.add_argument("--trace", action="store_true", help="also print the agent's reasoning and tool calls")
     args = parser.parse_args()
     if not args.list and not args.message:
         parser.error("give a message, or --list")
@@ -148,6 +150,8 @@ def main():
         arguments["session_id"] = args.session_id
     if args.max_tokens:
         arguments["max_tokens"] = args.max_tokens
+    if args.trace:
+        arguments["include_trace"] = True
     response = post(endpoint, headers, {
         "jsonrpc": "2.0",
         "id": 2,
@@ -159,8 +163,17 @@ def main():
     result = response["result"]
     if result.get("isError"):
         sys.exit(f"error: {result['content'][0]['text']}")
-    print(result["structuredContent"]["reply"])
-    print(f"session: {result['structuredContent']['session_id']}", file=sys.stderr)
+    content = result["structuredContent"]
+    # The trace goes to stderr, like the session id, so stdout stays just the reply.
+    for item in content.get("trace", []):
+        if item["type"] == "thinking":
+            print(f"[thinking] {item['text']}", file=sys.stderr)
+        elif item["type"] == "tool_use":
+            print(f"[tool call] {item['tool']} {json.dumps(item['input'])}", file=sys.stderr)
+        else:
+            print(f"[tool result] {item['tool']} ({item['status']}): {item['output']}", file=sys.stderr)
+    print(content["reply"])
+    print(f"session: {content['session_id']}", file=sys.stderr)
 
 
 if __name__ == "__main__":

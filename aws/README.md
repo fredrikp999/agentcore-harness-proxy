@@ -64,8 +64,9 @@ curl -N https://<your-hostname>/api/chat \
 | `harness` | Optional: a name from `harnessArns` (default: the first one). |
 | `max_tokens` | Optional, default 1000, capped at 8000. |
 
-The reply streams back as plain text. Errors before streaming starts are JSON
-with a 4xx/5xx status.
+The reply streams back as plain text, with any `<thinking>...</thinking>` blocks
+removed: Nova models write their reasoning in them even when the system prompt
+says not to. The MCP tool can return them, see below. Errors before streaming starts are JSON with a 4xx/5xx status.
 
 `GET /api/harnesses` returns the harness names (not their ARNs), the default and
 the caller's identity: `{"harnesses": ["managed"], "default": "managed", "user": "you@example.com"}`.
@@ -77,7 +78,9 @@ Any other path gets a 404.
 no `Mcp-Session-Id`) with one tool, `ask_agent`. It takes the same fields as
 `/api/chat` and returns the whole reply at once, as
 `{"reply": "...", "session_id": "..."}`. Pass the `session_id` back to
-continue the conversation. The reply comes as an SSE stream that sends a
+continue the conversation. With `"include_trace": true` the result also has a
+`trace`: the agent's reasoning, each tool it called with its input, and each
+tool result, in order, each cut to 2,000 characters. The reply comes as an SSE stream that sends a
 comment every 15 seconds until the agent finishes, so nothing on the way
 times out the wait. A client that doesn't accept `text/event-stream` gets
 plain JSON instead. `GET` and `DELETE` return 405, because the server never

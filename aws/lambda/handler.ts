@@ -145,8 +145,84 @@ function parseRequest(input: Record<string, unknown>): HarnessRequest | string {
 /** An error event inside the harness stream, as opposed to the stream itself failing. */
 class HarnessError extends Error {}
 
-/** Starts the harness call (throws if that fails) and returns the reply's text deltas. */
-async function invokeHarness(req: HarnessRequest): Promise<AsyncGenerator<string>> {
+const THINKING_OPEN = "<thinking>";
+const THINKING_CLOSE = "</thinking>";
+
+/** Length of the longest end of `text` that is the start of `tag`, i.e. a tag split across chunks. */
+function partialTagLength(text: string, tag: string): number {
+  for (let n = Math.min(tag.length - 1, text.length); n > 0; n--) {
+    if (text.endsWith(tag.slice(0, n))) return n;
+  }
+  return 0;
+}
+
+/** One piece of the agent's turn, in the order it happened. */
+type ReplyPart =
+  | { type: "text"; text: string }
+  | { type: "thinking"; text: string }
+  | { type: "tool_use"; id: string; tool: string; input: string }
+  | { type: "tool_result"; id: string; status: string; output: string };
+
+/**
+ * Moves <thinking>...</thinking> blocks out of the text parts into thinking parts, and drops the
+ * whitespace before the first visible text. Nova models write their reasoning in these tags even
+ * when the prompt says not to.
+ */
+async function* splitThinking(parts: AsyncIterable<ReplyPart>): AsyncGenerator<ReplyPart> {
+  let buffer = "";
+  let thought = "";
+  let inside = false;
+  let started = false;
+  const visible = (text: string): ReplyPart | undefined => {
+    const out = started ? text : text.trimStart();
+    if (out) started = true;
+    return out ? { type: "text", text: out } : undefined;
+  };
+  for await (const part of parts) {
+    if (part.type !== "text") {
+      yield part;
+      continue;
+    }
+    buffer += part.text;
+    for (;;) {
+      const tag = inside ? THINKING_CLOSE : THINKING_OPEN;
+      const at = buffer.indexOf(tag);
+      if (at >= 0) {
+        if (inside) {
+          thought += buffer.slice(0, at);
+          if (thought.trim()) yield { type: "thinking", text: thought.trim() };
+          thought = "";
+        } else {
+          const before = visible(buffer.slice(0, at));
+          if (before) yield before;
+        }
+        buffer = buffer.slice(at + tag.length);
+        inside = !inside;
+        continue;
+      }
+      // Hold back what might be the start of a tag until the next chunk shows.
+      const keep = partialTagLength(buffer, tag);
+      if (inside) {
+        thought += buffer.slice(0, buffer.length - keep);
+      } else {
+        const ready = visible(buffer.slice(0, buffer.length - keep));
+        if (ready) yield ready;
+      }
+      buffer = buffer.slice(buffer.length - keep);
+      break;
+    }
+  }
+  if (inside) {
+    // A block that never closed: keep it out of the reply, but in the trace.
+    if ((thought + buffer).trim()) yield { type: "thinking", text: (thought + buffer).trim() };
+  } else {
+    const rest = visible(buffer);
+    if (rest) yield rest;
+  }
+}
+
+/** Starts the harness call (throws if that fails) and returns the agent's turn as it streams. */
+async function invokeHarness(req: HarnessRequest): Promise<AsyncGenerator<ReplyPart>> {
   const response = await clientFor(req.harnessArn).send(
     new InvokeHarnessCommand({
       harnessArn: req.harnessArn,
@@ -156,17 +232,35 @@ async function invokeHarness(req: HarnessRequest): Promise<AsyncGenerator<string
       timeoutSeconds: 120,
     }),
   );
-  return (async function* () {
+  return splitThinking((async function* (): AsyncGenerator<ReplyPart> {
+    // Tool calls and results arrive as blocks whose content streams in deltas; each is passed on
+    // whole when its block stops. So is reasoning from models that return it separately.
+    let block: Extract<ReplyPart, { type: "tool_use" | "tool_result" }> | undefined;
+    let reasoning = "";
     for await (const ev of response.stream ?? []) {
-      if ("contentBlockDelta" in ev && ev.contentBlockDelta) {
+      if (ev.contentBlockStart?.start) {
+        const { toolUse, toolResult } = ev.contentBlockStart.start;
+        if (toolUse) block = { type: "tool_use", id: toolUse.toolUseId ?? "", tool: toolUse.name ?? "", input: "" };
+        if (toolResult) block = { type: "tool_result", id: toolResult.toolUseId ?? "", status: toolResult.status ?? "", output: "" };
+      } else if (ev.contentBlockDelta?.delta) {
         const delta = ev.contentBlockDelta.delta;
-        if (delta && "text" in delta && delta.text) yield delta.text;
-      } else if ("internalServerException" in ev || "validationException" in ev || "runtimeClientError" in ev) {
+        if (delta.text) yield { type: "text", text: delta.text };
+        else if (delta.reasoningContent?.text) reasoning += delta.reasoningContent.text;
+        else if (delta.toolUse && block?.type === "tool_use") block.input += delta.toolUse.input ?? "";
+        else if (delta.toolResult && block?.type === "tool_result") {
+          for (const r of delta.toolResult) block.output += r.text ?? (r.json === undefined ? "" : JSON.stringify(r.json));
+        }
+      } else if (ev.contentBlockStop) {
+        if (reasoning.trim()) yield { type: "thinking", text: reasoning.trim() };
+        if (block) yield block;
+        reasoning = "";
+        block = undefined;
+      } else if (ev.internalServerException || ev.validationException || ev.runtimeClientError) {
         console.error("harness stream error event", JSON.stringify(ev));
         throw new HarnessError("the harness reported an error");
       }
     }
-  })();
+  })());
 }
 
 async function chat(event: FunctionUrlEvent, stream: Writable): Promise<void> {
@@ -192,7 +286,7 @@ async function chat(event: FunctionUrlEvent, stream: Writable): Promise<void> {
     headers: { "content-type": "text/plain; charset=utf-8", "x-session-id": req.sessionId },
   });
   try {
-    for await (const text of reply) out.write(text);
+    for await (const part of reply) if (part.type === "text") out.write(part.text);
   } catch (err) {
     if (err instanceof HarnessError) {
       out.write("\n[error: the harness reported an error]");
@@ -229,12 +323,37 @@ const ASK_AGENT_TOOL = {
       },
       harness: { type: "string", enum: Object.keys(HARNESSES), description: `Default: ${DEFAULT_HARNESS}.` },
       max_tokens: { type: "integer", minimum: 1, maximum: MAX_TOKENS_CAP, description: "Default: 1000." },
+      include_trace: {
+        type: "boolean",
+        description:
+          "Also return the agent's reasoning and the tools it called, with their inputs and shortened " +
+          "results, in the order it happened. Useful to check how it got an answer. Default: false.",
+      },
     },
     required: ["message"],
   },
   outputSchema: {
     type: "object",
-    properties: { reply: { type: "string" }, session_id: { type: "string" } },
+    properties: {
+      reply: { type: "string" },
+      session_id: { type: "string" },
+      trace: {
+        type: "array",
+        description: "Only with include_trace.",
+        items: {
+          type: "object",
+          properties: {
+            type: { type: "string", enum: ["thinking", "tool_use", "tool_result"] },
+            text: { type: "string", description: "thinking" },
+            tool: { type: "string", description: "tool_use, tool_result" },
+            input: { description: "tool_use: the arguments the agent passed" },
+            status: { type: "string", description: "tool_result" },
+            output: { type: "string", description: "tool_result" },
+          },
+          required: ["type"],
+        },
+      },
+    },
     required: ["reply", "session_id"],
   },
 };
@@ -316,12 +435,14 @@ async function callTool(
   if (params.name !== ASK_AGENT_TOOL.name) {
     return respond(stream, 200, rpcError(id, -32602, `unknown tool: ${String(params.name)}`));
   }
-  const req = parseRequest(isObject(params.arguments) ? params.arguments : {});
+  const args = isObject(params.arguments) ? params.arguments : {};
+  const req = parseRequest(args);
   if (typeof req === "string") return respond(stream, 200, rpcResult(id, toolError(req)));
+  const includeTrace = args.include_trace === true;
 
   // Clients must accept SSE; answer with plain JSON for one that doesn't.
   if (!(event.headers?.accept ?? "").includes("text/event-stream")) {
-    return respond(stream, 200, rpcResult(id, await askAgent(req)));
+    return respond(stream, 200, rpcResult(id, await askAgent(req, includeTrace)));
   }
   const out = awslambda.HttpResponseStream.from(stream, {
     statusCode: 200,
@@ -331,7 +452,7 @@ async function callTool(
   const keepalive = setInterval(() => out.write(": working\n\n"), MCP_KEEPALIVE_MS);
   let result;
   try {
-    result = await askAgent(req);
+    result = await askAgent(req, includeTrace);
   } finally {
     clearInterval(keepalive);
   }
@@ -339,16 +460,48 @@ async function callTool(
   out.end();
 }
 
-async function askAgent(req: HarnessRequest) {
-  let reply = "";
+// Each trace item's text is cut to this length, so one large tool result can't flood the caller.
+const TRACE_ITEM_MAX_CHARS = 2_000;
+
+function clip(text: string): string {
+  return text.length > TRACE_ITEM_MAX_CHARS ? `${text.slice(0, TRACE_ITEM_MAX_CHARS)}… [shortened]` : text;
+}
+
+/** A tool's input as JSON when it is valid and short enough, else as clipped text. */
+function toolInput(input: string): unknown {
+  if (!input) return {};
   try {
-    for await (const text of await invokeHarness(req)) reply += text;
+    return input.length <= TRACE_ITEM_MAX_CHARS ? JSON.parse(input) : clip(input);
+  } catch {
+    return clip(input);
+  }
+}
+
+async function askAgent(req: HarnessRequest, includeTrace: boolean) {
+  let reply = "";
+  const trace: Record<string, unknown>[] = [];
+  const toolNames = new Map<string, string>();
+  try {
+    for await (const part of await invokeHarness(req)) {
+      if (part.type === "text") reply += part.text;
+      else if (!includeTrace) continue;
+      else if (part.type === "thinking") trace.push({ type: "thinking", text: clip(part.text) });
+      else if (part.type === "tool_use") {
+        toolNames.set(part.id, part.tool);
+        trace.push({ type: "tool_use", tool: part.tool, input: toolInput(part.input) });
+      } else {
+        const tool = toolNames.get(part.id) ?? "";
+        trace.push({ type: "tool_result", tool, status: part.status, output: clip(part.output) });
+      }
+    }
   } catch (err) {
     if (err instanceof HarnessError) return toolError("the harness reported an error");
     console.error("harness call failed", err);
     return toolError("harness invocation failed");
   }
-  const structuredContent = { reply, session_id: req.sessionId };
+  const structuredContent = includeTrace
+    ? { reply, session_id: req.sessionId, trace }
+    : { reply, session_id: req.sessionId };
   // The JSON again as text, for clients that only pass content blocks to the model.
   return { content: [{ type: "text", text: JSON.stringify(structuredContent) }], structuredContent };
 }

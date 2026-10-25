@@ -81,7 +81,11 @@ as it streams, and prints the session id to stderr.
 uv run clients/mcp_proxy.py --list
 uv run clients/mcp_proxy.py "Remember the number 7"
 uv run clients/mcp_proxy.py --session-id <id printed above> "What number did I say?"
+uv run clients/mcp_proxy.py --trace "Use Python to compute 17**13"
 ```
+
+`--trace` also prints the agent's reasoning, its tool calls and their results
+to stderr, before the reply.
 
 To add the agent to an MCP client, see [MCP](../aws/README.md#mcp).
 
