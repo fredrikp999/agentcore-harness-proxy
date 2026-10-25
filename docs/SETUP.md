@@ -151,7 +151,11 @@ The diff role is read-only because a pull request can change the code that
 1. As an administrator: `aws cloudformation deploy --stack-name GithubOidcDeploy
    --template-file aws/github-oidc.template.yaml --capabilities CAPABILITY_NAMED_IAM
    --region eu-west-1 --parameter-overrides GitHubRepo=<owner>/<repo>`. Add
-   `CreateOidcProvider=false` if the account already has the GitHub provider.
+   `CreateOidcProvider=false` if the account already has the GitHub provider. Newer
+   GitHub accounts put numeric ids in the token subject; if the login step says "Not
+   authorized to perform sts:AssumeRoleWithWebIdentity", print the `sub` claim and add
+   `GitHubSubjectRepo=<owner>@<id>/<repo>@<id>` (for example
+   `fredrikp999@24974179/agentcore-harness-proxy@1433222607`).
 2. In the repository settings, add the variables `AWS_DEPLOY_ROLE_ARN` and
    `AWS_DIFF_ROLE_ARN` (the stack outputs), `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`.
    None are secret.

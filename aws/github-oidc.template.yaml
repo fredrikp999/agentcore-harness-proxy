@@ -13,6 +13,10 @@ Parameters:
     Type: String
     Description: owner/repo allowed to assume the roles
     AllowedPattern: ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$
+  GitHubSubjectRepo:
+    Type: String
+    Default: ""
+    Description: Leave empty unless GitHub puts ids in the token subject (newer accounts), e.g. owner@123/repo@456. See the sub claim in a failed run.
   DeployEnvironment:
     Type: String
     Default: production
@@ -27,6 +31,7 @@ Parameters:
     Default: hnb659fds
 
 Conditions:
+  UseSubjectRepo: !Not [!Equals [!Ref GitHubSubjectRepo, ""]]
   CreateProvider: !Equals [!Ref CreateOidcProvider, "true"]
 
 Resources:
@@ -52,7 +57,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubRepo}:environment:${DeployEnvironment}"
+                token.actions.githubusercontent.com:sub: !Join ["", ["repo:", !If [UseSubjectRepo, !Ref GitHubSubjectRepo, !Ref GitHubRepo], ":environment:", !Ref DeployEnvironment]]
       Policies:
         - PolicyName: AssumeCdkRoles
           PolicyDocument:
@@ -81,7 +86,7 @@ Resources:
             Condition:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
-                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubRepo}:pull_request"
+                token.actions.githubusercontent.com:sub: !Join ["", ["repo:", !If [UseSubjectRepo, !Ref GitHubSubjectRepo, !Ref GitHubRepo], ":pull_request"]]
       Policies:
         - PolicyName: AssumeCdkLookupRole
           PolicyDocument:
