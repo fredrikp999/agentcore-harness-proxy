@@ -8,8 +8,9 @@ streams the reply to your terminal.
 You need:
 
 - [uv](https://docs.astral.sh/uv/) (`brew install uv`)
-- AWS credentials in `~/.aws/credentials` (the default profile) that are allowed
-  to call `bedrock-agentcore:InvokeHarness` on the harness
+- AWS credentials for the default profile that are allowed to call
+  `bedrock-agentcore:InvokeHarness` on the harness (see
+  [AWS credentials](#aws-credentials))
 - The harness ARN in a git-ignored `.env` file: copy `.env.example` to `.env`
   and set `HARNESS_ARN`
 
@@ -17,11 +18,28 @@ There is nothing to install by hand. The script declares its own dependencies
 (`boto3>=1.42`, the first versions with the harness API), and `uv run` creates a
 cached environment on first use.
 
+### AWS credentials
+
+Use one of these, with region `eu-west-1`:
+
+- **`aws login`** (recommended): signs the CLI in with your AWS console session,
+  so no keys are stored on disk. It needs AWS CLI 2.32 or later (`aws --version`;
+  upgrade with the installer at `https://awscli.amazonaws.com/AWSCLIV2.pkg`). The
+  session lasts up to 12 hours; run `aws login` again when it expires.
+- **`aws configure`** with access keys of an IAM user: in the IAM console open
+  the user, then **Security credentials**, then **Create access key** (use case
+  *Command Line Interface*). The keys go in `~/.aws/credentials`.
+- **`aws configure sso`** if the account uses IAM Identity Center. The start URL
+  is the **AWS access portal URL** on the Identity Center dashboard.
+
 Check that your credentials work:
 
 ```sh
 aws sts get-caller-identity
 ```
+
+Deploying the stacks in `infra/` needs more rights than calling the harness; see
+[`infra/README.md`](infra/README.md#deploy).
 
 ## Usage
 
@@ -92,6 +110,27 @@ The service token only works if a policy on the Access application has the actio
 rejected. Treat the client secret like a password: keep it in a password manager,
 keep `.env` at mode `600`, and never commit or paste it into chat. Create one
 token per client so you can revoke one without breaking the others.
+
+## Web UI
+
+The proxy hostname also serves a chat page: open `https://<your-hostname>/` in a
+browser and sign in through Cloudflare Access. That needs an **Allow** policy on
+the Access application that includes you (for example your email, with One-time
+PIN), next to the Service Auth policy for scripts. The browser holds no keys:
+Access adds the signed JWT to each request itself.
+
+- Pick a harness and the maximum output tokens, then chat. Replies stream in and
+  are rendered as Markdown. **Stop** cancels a reply.
+- Each chat is one harness session. Chats are kept in your browser's local
+  storage only, so they don't follow you to another browser or device.
+- After about 15 minutes idle, the harness session ends and the agent forgets the
+  earlier messages. The page says so when you return to such a chat.
+
+The source is in [`web/`](web/) (Vite and TypeScript, no framework). Build it
+with `npm install && npm run build` in `web/`, which writes to
+`infra/worker/public`, then deploy the Worker (see
+[`infra/README.md`](infra/README.md#deploy)). `npm run dev` serves the page
+locally, but without the `/api` routes.
 
 ## The harness
 

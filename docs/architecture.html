@@ -207,7 +207,8 @@
         <tbody>
           <tr><td>Cloudflare Access</td><td class="status">login / 403</td><td>No Allow policy or service token matches. The request never reaches AWS.</td></tr>
           <tr><td>Lambda</td><td class="status">401</td><td>Missing, expired or wrongly signed <code>Cf-Access-Jwt-Assertion</code>, or the wrong AUD.</td></tr>
-          <tr><td>Lambda</td><td class="status">405</td><td>Method is not POST.</td></tr>
+          <tr><td>Worker / Lambda</td><td class="status">404</td><td>Not <code>POST /api/chat</code> or <code>GET /api/harnesses</code>. The Worker serves the web UI for other paths.</td></tr>
+          <tr><td>Worker</td><td class="status">500</td><td><code>proxy misconfigured</code>: <code>vars.ORIGIN</code> in <code>wrangler.jsonc</code> is missing or not a URL. The request never reaches AWS.</td></tr>
           <tr><td>Lambda</td><td class="status">400</td><td>Body is not JSON, <code>message</code> is empty or over 20,000 characters, <code>harness</code> is unknown, or <code>session_id</code> is under 33 characters.</td></tr>
           <tr><td>AgentCore</td><td class="status">502</td><td><code>InvokeHarness</code> failed before streaming started. After that, a failure appends <code>[error: stream interrupted]</code> to the reply.</td></tr>
         </tbody>

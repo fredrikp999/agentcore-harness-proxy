@@ -29,6 +29,10 @@ function required(key: string): string {
       `Missing "${key}". Pass it with: cdk deploy -c ${key}=<value>, or set it in infra/deploy.local.json`,
     );
   }
+  // A value copied unchanged from deploy.local.example.json would deploy a proxy that rejects everyone.
+  if (/[<>]/.test(value)) {
+    throw new Error(`"${key}" is still a placeholder (${value}). Set the real value in infra/deploy.local.json`);
+  }
   return value;
 }
 

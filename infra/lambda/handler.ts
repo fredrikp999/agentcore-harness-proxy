@@ -17,6 +17,7 @@ declare const awslambda: {
 };
 
 interface FunctionUrlEvent {
+  rawPath?: string;
   headers?: Record<string, string | undefined>;
   body?: string;
   isBase64Encoded?: boolean;
@@ -82,13 +83,23 @@ function respond(stream: Writable, statusCode: number, body: unknown): void {
 }
 
 export const handler = awslambda.streamifyResponse(async (event, stream) => {
-  if (event.requestContext.http.method !== "POST") {
-    return respond(stream, 405, { error: "method not allowed" });
+  const route = `${event.requestContext.http.method} ${event.rawPath ?? "/"}`;
+  if (route !== "POST /api/chat" && route !== "GET /api/harnesses") {
+    return respond(stream, 404, { error: "not found" });
   }
 
   const user = await authenticate(event);
   if (!user) return respond(stream, 401, { error: "unauthorized" });
 
+  if (route === "GET /api/harnesses") {
+    // Names only: the ARNs carry the account id and stay server side.
+    return respond(stream, 200, { harnesses: Object.keys(HARNESSES), default: DEFAULT_HARNESS, user });
+  }
+
+  return chat(event, stream);
+});
+
+async function chat(event: FunctionUrlEvent, stream: Writable): Promise<void> {
   let input: { message?: unknown; session_id?: unknown; max_tokens?: unknown; harness?: unknown };
   try {
     const raw = event.isBase64Encoded
@@ -154,4 +165,4 @@ export const handler = awslambda.streamifyResponse(async (event, stream) => {
     out.write("\n[error: stream interrupted]");
   }
   out.end();
-});
+}

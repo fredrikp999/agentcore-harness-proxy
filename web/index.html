@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent Harness</title>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <button id="new-chat" class="primary" type="button">+ New chat</button>
+        <ul id="chat-list" class="chat-list"></ul>
+        <div id="user" class="signed-in"></div>
+      </aside>
+      <main class="main">
+        <header class="toolbar">
+          <button id="toggle-sidebar" class="icon" type="button" aria-label="Show chats">☰</button>
+          <label>Harness <select id="harness"></select></label>
+          <label>Max tokens <input id="max-tokens" type="number" min="1" max="8000" step="100" value="1000" /></label>
+        </header>
+        <section id="messages" class="messages" aria-live="polite"></section>
+        <div id="notice" class="notice" hidden></div>
+        <form id="composer" class="composer">
+          <textarea id="input" rows="3" maxlength="20000" placeholder="Message the agent (Enter to send, Shift+Enter for a new line)"></textarea>
+          <button id="send" class="primary" type="submit">Send</button>
+        </form>
+        <footer class="meta">
+          <span id="session"></span>
+          <button id="copy-session" class="link" type="button">copy</button>
+          <span id="count"></span>
+        </footer>
+      </main>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

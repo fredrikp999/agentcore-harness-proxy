@@ -20,6 +20,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from pathlib import Path
@@ -81,7 +82,7 @@ def main():
         body["max_tokens"] = args.max_tokens
 
     request = urllib.request.Request(
-        url,
+        urllib.parse.urljoin(url, "/api/chat"),
         data=json.dumps(body).encode(),
         method="POST",
         headers={

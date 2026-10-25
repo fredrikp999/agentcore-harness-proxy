@@ -54,11 +54,24 @@ out of the repository. They go in two git-ignored files, each copied from an
    Host from the target URL):
 
    ```sh
+   (cd ../web && npm install && npm run build)   # the web UI, into worker/public
    cd worker
    cp wrangler.example.jsonc wrangler.jsonc   # set your hostname and the function URL
    npx wrangler login   # once
    npx wrangler deploy
    ```
+
+   In `wrangler.jsonc`, set `routes[0].pattern` to your hostname and
+   `vars.ORIGIN` to the `FunctionUrl` output without the trailing slash. If
+   `ORIGIN` is left as the `<function-url-host>` placeholder, every `/api/*` call
+   fails with `500 proxy misconfigured`; in the web UI that shows as
+   `request failed (HTTP 500)` and an empty Harness list.
+
+   The Worker serves the web UI from `worker/public` and forwards only `/api/*`
+   to the Lambda. Rebuild the UI before each deploy that should include UI changes.
+   If `/` returns `{"error":"not found"}` instead of the page, the deployed Worker
+   is older than the UI and still forwards every path to the Lambda: build the
+   UI and run `npx wrangler deploy` again.
 
    The Worker is attached to your hostname as a custom domain, which creates the
    DNS record itself. Delete any existing CNAME for that name first. Cloudflare
@@ -71,13 +84,13 @@ From the repository root, `uv run invoke_proxy.py "Hello"` does this with your
 service token from `.env` (see the main README). With `curl`:
 
 ```sh
-curl -N https://<your-hostname>/ \
+curl -N https://<your-hostname>/api/chat \
   -H "CF-Access-Client-Id: <id>.access" \
   -H "CF-Access-Client-Secret: <secret>" \
   -d '{"message": "Hello, who are you?"}'
 ```
 
-Request body (JSON, `POST`):
+`POST /api/chat` request body (JSON):
 
 | Field | Description |
 |---|---|
@@ -88,6 +101,10 @@ Request body (JSON, `POST`):
 
 The reply streams back as plain text. Errors before streaming starts are JSON
 with a 4xx/5xx status.
+
+`GET /api/harnesses` returns the harness names (not their ARNs), the default and
+the caller's identity: `{"harnesses": ["managed"], "default": "managed", "user": "you@example.com"}`.
+Any other path or method gets a 404.
 
 ## The harness stack
 

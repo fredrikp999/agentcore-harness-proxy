@@ -188,7 +188,7 @@ These are not done yet.
   protected environment. Run `cdk diff` on pull requests. This removes the need
   for any deploy keys.
 - **Account hygiene:** enable MFA on every IAM user, remove users that are not
-  used, and consider IAM Identity Center so that command-line access uses
-  short-lived credentials instead of long-lived keys.
+  used, and use `aws login` (or IAM Identity Center) so that command-line access
+  uses short-lived credentials instead of long-lived access keys.
 - **Cloudflare as code:** manage the Access application with Terraform or the
   Cloudflare provider so it cannot drift.

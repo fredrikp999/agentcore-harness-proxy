@@ -31,6 +31,7 @@ response tells you which one rejected it.
 | Symptom | Cause | Fix |
 |---|---|---|
 | `cdk bootstrap` fails with `AccessDenied ... cloudformation:CreateChangeSet` | The everyday CLI user has no CloudFormation or IAM rights, which is correct. | Run bootstrap once from an administrator identity. AWS CloudShell works and needs no access keys. Then give the CLI user only `sts:AssumeRole` on the `cdk-hnb659fds-*` roles. |
+| `aws login` is not a valid command, or `aws configure list-profiles` prints nothing | The AWS CLI is older than 2.32, or no credentials have been set up on this machine yet. | Upgrade the CLI, then run `aws login`, or use `aws configure` with IAM user access keys. See [AWS credentials](../README.md#aws-credentials) in the README. |
 | `cdk deploy` finishes in about 3 seconds and changes nothing | The template and code were already deployed. | Nothing is wrong. Look for `Publishing Proxy/Code` and `deploying... [1/1]` when you expect a change. |
 | Tested right after `cdk deploy` and saw old behaviour | CloudFormation had not finished the update, or the deploy output was not read. | Wait for the `HarnessProxy` success line and the Outputs block before testing. |
 | `Failed to spawn: invoke_proxy.py` | `uv run` was started from a subfolder. | Run it from the repository root, where the script and `.env` are. |
@@ -65,6 +66,8 @@ response tells you which one rejected it.
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| Web UI shows `request failed (HTTP 500)` and the Harness list is empty; `wrangler tail` logs `ORIGIN is missing or not a URL` | `vars.ORIGIN` in `wrangler.jsonc` was still the `https://<function-url-host>` placeholder copied from `wrangler.example.jsonc`. An earlier deploy had passed the origin with `--var`, and a plain `wrangler deploy` replaced it with the placeholder. The Lambda log shows no request at all. | Set `vars.ORIGIN` to the stack's `FunctionUrl` output without the trailing slash and run `npx wrangler deploy`. |
+| `/` returns `{"error":"not found"}` (JSON) instead of the web UI | The deployed Worker predates the UI and forwards every path to the Lambda, which only knows the `/api/*` routes. A JSON 404 comes from the Lambda; the current Worker's own 404 is plain text. | Build the UI (`npm run build` in `web/`) and run `npx wrangler deploy` in `infra/worker`. |
 | `error code: 1101`, HTTP 500 | The Worker threw an unhandled exception. Here `ORIGIN` was not set, so `new URL(undefined)` threw. | Set `vars.ORIGIN` in `wrangler.jsonc` (or pass `--var ORIGIN:...`). A `--var` given on one deploy is dropped by the next plain `wrangler deploy`, so keep it in the file. The Worker now answers `500 proxy misconfigured` and logs the reason. |
 | Worker forwards to another host | `new URL("//host/x", base)` treats the path as protocol-relative. | The Worker builds the target by concatenating onto the origin and rejects any result that leaves it. Keep that check. |
 | Worker reachable on a `workers.dev` address that Access does not protect | Wrangler enables `workers.dev` by default. | `workers_dev: false` and `preview_urls: false` in `wrangler.jsonc`. |

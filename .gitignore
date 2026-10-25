@@ -39,3 +39,6 @@ build/
 
 # Logs
 *.log
+
+# Built web UI
+infra/worker/public/
