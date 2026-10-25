@@ -61,6 +61,9 @@ response tells you which one rejected it.
 | `error code: 1010`, HTTP 403 | Cloudflare's Browser Integrity Check blocks the default `Python-urllib` User-Agent. It is not an Access error. | Send a custom `User-Agent`, as `clients/invoke_proxy.py` does. |
 | The script prints an HTML login page | The HTTP client followed Access's redirect. | Do not follow redirects, so the real status is visible. `clients/invoke_proxy.py` stops and explains. |
 | `curl` output arrives all at once | Output buffering. | Use `curl -N`. |
+| `mcp_proxy.py` fails with `JSONDecodeError: Expecting value` after `initialize` | The proxy answered `notifications/initialized` with `200 application/octet-stream` and an empty body instead of `202`. **With Lambda response streaming, the status and headers only go out with the first write**, and the handler wrote nothing. | The handler now writes an empty chunk before ending the 202, and `mcp_proxy.py` treats any empty body as no reply. Check with `curl -D -` that the notification gets `HTTP/2 202`. |
+| `/api/mcp` returns `403` `browser origins are not allowed` | The request had an `Origin` header. Browsers send one; MCP clients don't. | Call it from an MCP client or a script, not from a web page. |
+| An MCP client reports it can't connect, or asks to authenticate | Access redirected it to the login page: no service token headers, or the client can't send fixed headers (claude.ai and Claude Desktop connectors expect OAuth). | Add the token with `claude mcp add ... --header`. See [MCP](../aws/README.md#mcp). |
 
 ### Worker
 

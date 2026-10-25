@@ -10,6 +10,7 @@ wherever you run them from.
 |---|---|---|
 | [`invoke_harness.py`](invoke_harness.py) | The harness directly (`InvokeHarness`, SigV4) | AWS credentials and `HARNESS_ARN` |
 | [`invoke_proxy.py`](invoke_proxy.py) | The Cloudflare Access proxy | A Cloudflare service token, no AWS credentials |
+| [`mcp_proxy.py`](mcp_proxy.py) | The proxy's MCP endpoint, `/api/mcp` | A Cloudflare service token, no AWS credentials |
 
 ```sh
 cp .env.example .env     # at the repository root, then fill in the values
@@ -68,6 +69,21 @@ uv run clients/invoke_proxy.py "Hello, who are you?"
 uv run clients/invoke_proxy.py --session-id my-test-session-0000000000000000001 "Remember 7"
 uv run clients/invoke_proxy.py --harness managed "Hello"
 ```
+
+## Over MCP
+
+[`mcp_proxy.py`](mcp_proxy.py) calls the `ask_agent` tool on `/api/mcp`, the
+same way an MCP client such as Claude Code does. It uses the same `.env`
+settings as `invoke_proxy.py`. It prints the reply once the agent is done, not
+as it streams, and prints the session id to stderr.
+
+```sh
+uv run clients/mcp_proxy.py --list
+uv run clients/mcp_proxy.py "Remember the number 7"
+uv run clients/mcp_proxy.py --session-id <id printed above> "What number did I say?"
+```
+
+To add the agent to an MCP client, see [MCP](../aws/README.md#mcp).
 
 ## Values for `.env`
 

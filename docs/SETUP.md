@@ -12,7 +12,8 @@ with fixes, are in [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).
 ## Goal
 
 Call an AWS AgentCore harness from clients that have no AWS credentials, such as
-`curl`, a script or an app, without exposing the harness to the internet.
+`curl`, a script, an app or an MCP client, without exposing the harness to the
+internet.
 
 The harness can only be called through the `InvokeHarness` API, which needs
 SigV4-signed AWS credentials. Handing those credentials to every client would
@@ -66,6 +67,25 @@ Host header from the target URL, and the reply streams straight back.
 The Worker also drops the service-token headers, so the Lambda only receives the
 signed Access JWT. It contains no auth logic. Access in front of it and the JWT
 check in the Lambda do the security work.
+
+### MCP on the same Lambda
+
+`POST /api/mcp` makes the agent an MCP server with one tool, `ask_agent`, so
+MCP clients such as Claude Code can use it as a tool. It is a second route in
+the same Lambda, not a separate service. It reuses the JWT check, the input
+validation and the harness call, and Access and the Worker need no changes.
+AgentCore Gateway could serve MCP too, but it would add a second inbound auth
+system next to Access and another stack, just to expose one tool.
+
+The endpoint is stateless (no `Mcp-Session-Id`): the conversation is the harness
+session, whose id the tool returns. A tool result can't stream, so `tools/call`
+answers over SSE, with a comment every 15 seconds while the agent works, then the
+whole reply. Requests with an `Origin` header are refused, because only a web
+page calling with a visitor's Access cookie would send one.
+
+Clients authenticate with a service token in two headers. claude.ai and Claude
+Desktop connectors can't send fixed headers and expect OAuth instead, so they
+don't work yet (see the next steps below).
 
 ### No stored AWS keys
 
@@ -150,6 +170,8 @@ Deploys then assume those roles instead of using powerful credentials directly.
    - Calling the public hostname with no token returns an Access login or `403`.
    - Calling the public hostname with a valid service token streams a reply. The
      repository's `clients/invoke_proxy.py` does this (see `clients/README.md`).
+   - `uv run clients/mcp_proxy.py --list` shows the `ask_agent` tool, and
+     `uv run clients/mcp_proxy.py "Hello"` gets a reply over MCP.
 
 If a step fails, see [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md). It lists each
 error seen during this setup, with its cause.
@@ -192,5 +214,9 @@ These are not done yet.
 - **Account hygiene:** enable MFA on every IAM user, remove users that are not
   used, and use `aws login` (or IAM Identity Center) so that command-line access
   uses short-lived credentials instead of long-lived access keys.
+- **MCP for claude.ai and Claude Desktop:** their custom connectors need OAuth.
+  Set Access up as the OAuth authorization server for `/api/mcp`, so a person
+  signs in once and the connector gets a token, then check that the Lambda
+  accepts the JWT that results.
 - **Cloudflare as code:** manage the Access application with Terraform or the
   Cloudflare provider so it cannot drift.

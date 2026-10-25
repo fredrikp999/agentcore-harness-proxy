@@ -69,7 +69,35 @@ with a 4xx/5xx status.
 
 `GET /api/harnesses` returns the harness names (not their ARNs), the default and
 the caller's identity: `{"harnesses": ["managed"], "default": "managed", "user": "you@example.com"}`.
-Any other path or method gets a 404.
+Any other path gets a 404.
+
+### MCP
+
+`POST /api/mcp` serves the agent as an MCP server (Streamable HTTP, stateless,
+no `Mcp-Session-Id`) with one tool, `ask_agent`. It takes the same fields as
+`/api/chat` and returns the whole reply at once, as
+`{"reply": "...", "session_id": "..."}`. Pass the `session_id` back to
+continue the conversation. The reply comes as an SSE stream that sends a
+comment every 15 seconds until the agent finishes, so nothing on the way
+times out the wait. A client that doesn't accept `text/event-stream` gets
+plain JSON instead. `GET` and `DELETE` return 405, because the server never
+starts a stream of its own and keeps no MCP session. A request with an
+`Origin` header is refused (403): MCP clients don't send one, so it can only
+be a web page calling with a signed-in visitor's Access cookie.
+
+Access lets callers in the same way as for `/api/chat`, so a client needs a
+service token. To add it to Claude Code:
+
+```sh
+claude mcp add --transport http agent https://<your-hostname>/api/mcp \
+  --header "CF-Access-Client-Id: <id>.access" \
+  --header "CF-Access-Client-Secret: <secret>"
+```
+
+claude.ai and Claude Desktop custom connectors can't send fixed headers. They
+expect OAuth, and an unauthenticated request gets a redirect to the Access
+login page, which they can't follow. They need Access set up as the
+connector's OAuth server; that isn't part of this setup.
 
 ## The harness stack
 

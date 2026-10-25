@@ -1,8 +1,8 @@
 # AgentCore agent with a Cloudflare Access proxy
 
 An agent on Amazon Bedrock AgentCore (a harness: a managed agent loop configured
-in code), reachable from a browser chat UI and from scripts without handing out
-AWS keys. Cloudflare Access checks who you are; a Lambda verifies that and calls
+in code), reachable from a browser chat UI, from scripts and from MCP clients
+such as Claude Code, without handing out AWS keys. Cloudflare Access checks who you are; a Lambda verifies that and calls
 the harness with its own IAM role.
 
 ## Repository layout
@@ -31,6 +31,8 @@ only in git-ignored files: `.env`, `aws/deploy.local.json` and
    ([`cloudflare/`](cloudflare/README.md#2-worker-and-web-ui)).
 4. **Use it:** open `https://<your-hostname>/`, or run
    `uv run clients/invoke_proxy.py "Hello"` ([`clients/`](clients/README.md)).
+   MCP clients such as Claude Code can call it at `https://<your-hostname>/api/mcp`
+   ([MCP](aws/README.md#mcp)).
 
 To change the agent afterwards, edit [`agent/agent.ts`](agent/agent.ts) or
 [`agent/system-prompt.md`](agent/system-prompt.md) and run
@@ -46,7 +48,7 @@ way, with fixes.
 
 ```mermaid
 flowchart LR
-  client["Browser / client<br/>Access login or service token"]
+  client["Browser, script or MCP client<br/>Access login or service token"]
 
   subgraph cf["Cloudflare: your hostname"]
     access["Access<br/>checks policy, signs a JWT"]
@@ -54,7 +56,7 @@ flowchart LR
   end
 
   subgraph aws["AWS eu-west-1"]
-    lambda["Lambda function URL<br/>1. verify Access JWT<br/>2. validate body<br/>3. InvokeHarness, stream"]
+    lambda["Lambda function URL<br/>/api/chat and /api/mcp<br/>1. verify Access JWT<br/>2. validate body<br/>3. InvokeHarness, stream"]
     harness["AgentCore harness<br/>defined in agent/"]
   end
 
@@ -63,7 +65,7 @@ flowchart LR
   origin -->|"HTTPS"| lambda
   lambda -->|"InvokeHarness (SigV4, Lambda role)"| harness
   lambda -.->|"fetch team keys (JWKS)"| access
-  harness -.->|"reply streams back as text/plain<br/>with x-session-id header"| client
+  harness -.->|"reply: streamed text/plain from /api/chat,<br/>one MCP tool result from /api/mcp"| client
 
   script["clients/invoke_harness.py<br/>your AWS credentials"] -->|"direct InvokeHarness (SigV4)"| harness
 ```
