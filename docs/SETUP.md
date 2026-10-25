@@ -76,10 +76,21 @@ environment variables, in the repository or on clients.
 
 The role is allowed `bedrock-agentcore:InvokeHarness` and
 `bedrock-agentcore:InvokeAgentRuntime` (`InvokeHarness` is also authorized
-against that action) on the harness ARNs listed in `infra/deploy.local.json`, and
+against that action) on the harness ARNs the proxy is configured with, and
 nothing else beyond writing its own logs. If the function is ever abused, the
 damage is limited to calling those harnesses. Granting `InvokeHarness` alone
 fails with an `AccessDeniedException` for `InvokeAgentRuntime`.
+
+### The harness is managed here too, as its own stack
+
+A harness is configuration (model, prompt, tools, role), so it is defined in
+`infra/lib/agent-harness-stack.ts` and the prompt is a file in the repository.
+Changes are reviewed in pull requests and can be reproduced. It is a separate
+stack from the proxy because the prompt changes far more often than the proxy.
+The proxy reads the harness ARN from an SSM parameter, not a CloudFormation
+export, so the harness can be replaced without first detaching the proxy. The two
+stacks can later move to separate repositories, with the SSM parameter as the
+only link between them.
 
 ### Infrastructure as code with CDK
 
@@ -120,12 +131,13 @@ Deploys then assume those roles instead of using powerful credentials directly.
    ```sh
    cd infra
    npm install
-   cp deploy.local.example.json deploy.local.json   # team domain, AUD tag, harness ARNs
-   npx cdk deploy
+   cp deploy.local.example.json deploy.local.json   # team domain, AUD tag, harness settings
+   npx cdk deploy --all
    ```
 
-   The settings can also be passed as `-c key=value`. The `FunctionUrl` output is
-   the origin address.
+   This deploys the `AgentHarness` stack, then the `HarnessProxy` stack. The
+   settings can also be passed as `-c key=value`. The `FunctionUrl` output is the
+   origin address.
 5. **Deploy the Worker:** from `infra/worker`, copy `wrangler.example.jsonc` to
    `wrangler.jsonc`, set the hostname and the function URL (`ORIGIN`), then run
    `npx wrangler deploy`. It attaches to the hostname as a custom domain, which creates the DNS record, so delete any

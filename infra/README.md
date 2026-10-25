@@ -1,6 +1,14 @@
-# Harness proxy (Lambda + Cloudflare Access)
+# Harness and proxy (CDK, Lambda, Cloudflare Access)
 
-A Lambda function URL that streams replies from the AgentCore harnesses. It is
+This CDK app has two stacks:
+
+- **`AgentHarness`**: the AgentCore harness itself and its execution role. See
+  [The harness stack](#the-harness-stack).
+- **`HarnessProxy`**: a Lambda function URL in front of the harness, plus the
+  edge Worker in `worker/`. It reads the harness ARN from an SSM parameter that
+  `AgentHarness` writes.
+
+The proxy is a Lambda function URL that streams replies from the AgentCore harnesses. It is
 meant to sit behind Cloudflare Access: every request must carry a valid
 `Cf-Access-Jwt-Assertion` header, which the Lambda verifies against your
 team's keys. The Lambda calls `InvokeHarness` with its own IAM role, so there
@@ -29,13 +37,14 @@ out of the repository. They go in two git-ignored files, each copied from an
    ```sh
    cd infra
    npm install
-   cp deploy.local.example.json deploy.local.json   # fill in the three settings
-   npx cdk deploy
+   cp deploy.local.example.json deploy.local.json   # fill in the settings
+   npx cdk deploy --all    # AgentHarness first, then HarnessProxy
    ```
 
-   `deploy.local.json` holds `accessTeamDomain`, `accessAud` and `harnessArns`
-   (name -> harness ARN; the first name is the default harness). Any of them can
-   also be given as `-c key=value`, which wins over the file.
+   `deploy.local.json` holds `accessTeamDomain` and `accessAud` (required), and
+   `harnessName` and `modelId` for the harness (optional). Any setting can also be
+   given as `-c key=value`, which wins over the file. You can deploy one stack
+   alone with `npx cdk deploy AgentHarness` or `npx cdk deploy HarnessProxy`.
 
    The `FunctionUrl` output is the origin, e.g.
    `https://abc123.lambda-url.eu-west-1.on.aws/`.
@@ -80,13 +89,50 @@ Request body (JSON, `POST`):
 The reply streams back as plain text. Errors before streaming starts are JSON
 with a 4xx/5xx status.
 
+## The harness stack
+
+`AgentHarness` creates an IAM execution role for the harness, the harness
+(`AWS::BedrockAgentCore::Harness`) and an SSM parameter
+`/agent-harness/<harnessName>/arn` holding its ARN. The proxy reads that
+parameter when it is deployed, so deploy `AgentHarness` first (`--all` does).
+An SSM parameter is used instead of a CloudFormation export because an export
+cannot change while another stack uses it, which would block replacing the
+harness.
+
+- **Change the prompt:** edit `harness/system-prompt.md` and run
+  `npx cdk deploy AgentHarness`. Review the diff first with `npx cdk diff`.
+- **Change the model:** set `modelId` in `deploy.local.json` and redeploy. The
+  role's Bedrock permission follows the model id.
+- **Rename the harness:** `harnessName` cannot change in place. CloudFormation
+  creates a new harness with a new ARN and deletes the old one, which ends its
+  sessions. Redeploy `HarnessProxy` afterwards so it picks up the new ARN.
+- **The role** is based on the policy the AgentCore console generates, without
+  the parts for features this harness does not use (browser, code interpreter,
+  file systems, memory). If the runtime fails to start after a change, compare
+  with a console-generated policy.
+
+### Moving from a harness created in the console
+
+A harness created by hand is not managed by this stack. To switch:
+
+1. Put the old harness under `harnessArns` in `deploy.local.json`
+   (`{"old": "<its ARN>"}`) so the proxy keeps serving it, and run
+   `npx cdk deploy --all`. The new harness is offered under the name `managed`
+   (`harnessAlias`), and the old one stays the default.
+2. Test the new one: `uv run invoke_proxy.py --harness managed "Hello"`.
+3. Remove `harnessArns` from `deploy.local.json` and run
+   `npx cdk deploy HarnessProxy`. `managed` is now the default.
+4. Set `HARNESS_ARN` in `.env` to the new ARN (the `HarnessArn` output), then
+   delete the old harness in the console.
+
 ## Notes
 
 - The function URL is public. Access is enforced inside the Lambda by the JWT
   check. Requests without a valid token get a 401, so don't remove that check.
 - The IAM role may only call `bedrock-agentcore:InvokeHarness` and
   `bedrock-agentcore:InvokeAgentRuntime` (which `InvokeHarness` is also checked
-  against) on the harness ARNs in `bin/app.ts`.
+  against) on the harness ARNs the proxy is configured with (the managed harness, plus
+  any listed under `harnessArns`).
 - Check the stack with `npx cdk synth -c accessTeamDomain=x -c accessAud=y`.
 - After `cdk deploy`, wait for the success line before testing. The deployed
   settings are in `cdk.out/HarnessProxy.template.json`.

@@ -95,10 +95,19 @@ token per client so you can revoke one without breaking the others.
 
 ## The harness
 
-The harness ARN is not stored in this repository. It lives in your local `.env`
-(`HARNESS_ARN`, for the scripts) and in `infra/deploy.local.json` (for the
-proxy), both git-ignored. The harness runs in eu-west-1. It uses `global.anthropic.claude-sonnet-4-6` with the system prompt "You are a
-helpful assistant." and has no tools. Its runtime uses a `PUBLIC` network.
+The harness is defined in this repository and deployed as the `AgentHarness`
+CDK stack (`infra/lib/agent-harness-stack.ts`). It runs in eu-west-1, has no
+tools and no memory, and its runtime uses a `PUBLIC` network.
+
+- **System prompt:** [`infra/harness/system-prompt.md`](infra/harness/system-prompt.md).
+- **Model and name:** `modelId` and `harnessName` in the git-ignored
+  `infra/deploy.local.json` (defaults: `eu.amazon.nova-micro-v1:0` and
+  `agent_harness`).
+- **ARN:** a stack output and an SSM parameter. It is not stored in the
+  repository. Put it in your local `.env` as `HARNESS_ARN` for the scripts.
+
+To change the prompt or the model, edit them and run `npx cdk deploy --all` from
+`infra/`. See [`infra/README.md`](infra/README.md#the-harness-stack).
 
 ## Architecture
 
@@ -119,7 +128,7 @@ flowchart LR
 
   subgraph aws["AWS eu-west-1"]
     lambda["Lambda function URL<br/>1. verify Access JWT<br/>2. validate body<br/>3. InvokeHarness, stream"]
-    harness["AgentCore harness"]
+    harness["AgentCore harness<br/>AgentHarness stack"]
   end
 
   client -->|"POST"| access

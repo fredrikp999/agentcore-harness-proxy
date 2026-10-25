@@ -1,7 +1,6 @@
 {
   "accessTeamDomain": "<team>.cloudflareaccess.com",
   "accessAud": "<application-aud-tag>",
-  "harnessArns": {
-    "<harness-name>": "arn:aws:bedrock-agentcore:<region>:<account-id>:harness/<harness-id>"
-  }
+  "harnessName": "agent_harness",
+  "modelId": "eu.amazon.nova-micro-v1:0"
 }

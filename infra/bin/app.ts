@@ -1,12 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import * as path from "node:path";
 import { App } from "aws-cdk-lib";
-import { HarnessProxyStack } from "../lib/harness-stack";
+import { AgentHarnessStack } from "../lib/agent-harness-stack";
+import { HarnessProxyStack } from "../lib/proxy-stack";
 
 const app = new App();
 
-// Deployment values (Access settings, harness ARNs with the account id) come from -c flags or
-// from the git-ignored infra/deploy.local.json, so they stay out of the repository.
+// Deployment values (Access settings, ARNs with the account id) come from -c flags or from the
+// git-ignored infra/deploy.local.json, so they stay out of the repository.
 const localFile = path.join(__dirname, "..", "deploy.local.json");
 const local: Record<string, unknown> = existsSync(localFile)
   ? JSON.parse(readFileSync(localFile, "utf8"))
@@ -14,6 +15,11 @@ const local: Record<string, unknown> = existsSync(localFile)
 
 function setting(key: string): unknown {
   return app.node.tryGetContext(key) ?? local[key];
+}
+
+function optional(key: string, fallback: string): string {
+  const value = setting(key);
+  return typeof value === "string" && value ? value : fallback;
 }
 
 function required(key: string): string {
@@ -26,21 +32,33 @@ function required(key: string): string {
   return value;
 }
 
-function harnessArns(): Record<string, string> {
+/** Harnesses that already exist outside this app, as name -> ARN. Optional. */
+function externalHarnessArns(): Record<string, string> {
   let value = setting("harnessArns");
   if (typeof value === "string") value = JSON.parse(value);
-  const entries = value && typeof value === "object" ? Object.entries(value) : [];
-  if (entries.length === 0 || entries.some(([, arn]) => typeof arn !== "string" || !arn)) {
-    throw new Error(
-      'Missing "harnessArns": an object of name -> harness ARN, in infra/deploy.local.json or -c harnessArns=\'{"name":"arn"}\'. The first name is the default.',
-    );
+  if (value === undefined || value === null) return {};
+  const entries = typeof value === "object" ? Object.entries(value) : [];
+  if (entries.some(([, arn]) => typeof arn !== "string" || !arn)) {
+    throw new Error('"harnessArns" must be an object of name -> harness ARN');
   }
   return Object.fromEntries(entries) as Record<string, string>;
 }
 
-new HarnessProxyStack(app, "HarnessProxy", {
-  env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: "eu-west-1" },
+const env = { account: process.env.CDK_DEFAULT_ACCOUNT, region: "eu-west-1" };
+
+const harness = new AgentHarnessStack(app, "AgentHarness", {
+  env,
+  harnessName: optional("harnessName", "agent_harness"),
+  modelId: optional("modelId", "eu.amazon.nova-micro-v1:0"),
+  systemPrompt: readFileSync(path.join(__dirname, "..", "harness", "system-prompt.md"), "utf8").trim(),
+});
+
+const proxy = new HarnessProxyStack(app, "HarnessProxy", {
+  env,
   accessTeamDomain: required("accessTeamDomain"),
   accessAud: required("accessAud"),
-  harnessArns: harnessArns(),
+  harnessArns: externalHarnessArns(),
+  managedHarness: { alias: optional("harnessAlias", "managed"), arnParameterName: harness.arnParameterName },
 });
+// Deploy the harness (and its SSM parameter) before the proxy that reads it.
+proxy.addStackDependency(harness);

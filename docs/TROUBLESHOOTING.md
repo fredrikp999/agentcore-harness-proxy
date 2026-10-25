@@ -34,6 +34,7 @@ response tells you which one rejected it.
 | `cdk deploy` finishes in about 3 seconds and changes nothing | The template and code were already deployed. | Nothing is wrong. Look for `Publishing Proxy/Code` and `deploying... [1/1]` when you expect a change. |
 | Tested right after `cdk deploy` and saw old behaviour | CloudFormation had not finished the update, or the deploy output was not read. | Wait for the `HarnessProxy` success line and the Outputs block before testing. |
 | `Failed to spawn: invoke_proxy.py` | `uv run` was started from a subfolder. | Run it from the repository root, where the script and `.env` are. |
+| README said the harness used Sonnet, but it used Nova Micro | The harness had been changed in the console after it was created, so the docs drifted. | Read the real configuration (`get_harness` in the `bedrock-agentcore-control` API) before describing or recreating a harness. This is a reason to define it in the `AgentHarness` stack. |
 | Cannot find the Lambda log group | CDK named it itself, for example `<StackName>-ProxyLogs<hash>`, not `/aws/lambda/...`. | Open CloudWatch, then Log groups, and look for the stack name. The `/aws/bedrock-agentcore/runtimes/...` group belongs to the harness and is noisy (it restarts every few minutes). |
 
 ### Cloudflare dashboard
