@@ -124,8 +124,10 @@ harness.
   creates a new harness with a new ARN and deletes the old one, which ends its
   sessions. Redeploy `HarnessProxy` afterwards so it picks up the new ARN.
 - **The role** is based on the policy the AgentCore console generates, without
-  the parts for features this harness does not use (browser, code interpreter,
-  file systems, memory). If the runtime fails to start after a change, compare
+  the parts for features this harness does not use (browser, file systems,
+  memory). It includes the statement for the AWS-managed code interpreter
+  (`arn:aws:bedrock-agentcore:<region>:aws:code-interpreter/*`), which the Code
+  Interpreter tool needs. If the runtime fails to start after a change, compare
   with a console-generated policy.
 
 ### Moving from a harness created in the console

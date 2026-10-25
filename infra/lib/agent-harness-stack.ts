@@ -13,7 +13,8 @@ export interface AgentHarnessStackProps extends StackProps {
 }
 
 /**
- * An AgentCore harness with no tools, no memory and a public network, plus its execution role.
+ * An AgentCore harness with the AWS-managed Code Interpreter as its only added tool, no memory and
+ * a public network, plus its execution role.
  * The harness ARN is published in an SSM parameter so other stacks can read it without a
  * CloudFormation export, which would block replacing the harness while another stack uses it.
  */
@@ -40,8 +41,7 @@ export class AgentHarnessStack extends Stack {
     });
 
     // Based on the policy the AgentCore console generates for a harness, without the parts for
-    // features this harness does not use (browser, code interpreter, EFS, S3 files, memory,
-    // bedrock-mantle). If the runtime fails to start, compare with that console policy first.
+    // features this harness does not use (browser, EFS, S3 files, memory, bedrock-mantle). If the runtime fails to start, compare with that console policy first.
     const logGroups = `arn:aws:logs:${region}:${account}:log-group:/aws/bedrock-agentcore/runtimes`;
     const statements = [
       new iam.PolicyStatement({
@@ -106,6 +106,19 @@ export class AgentHarnessStack extends Stack {
           `arn:aws:bedrock-agentcore:${region}:${account}:workload-identity-directory/default/workload-identity/${runtime}-*`,
         ],
       }),
+      // The AWS-managed code interpreter (aws.codeinterpreter.v1), which the code interpreter tool
+      // uses when no codeInterpreterArn is given.
+      new iam.PolicyStatement({
+        sid: "AgentCoreCodeInterpreterDefault",
+        actions: [
+          "bedrock-agentcore:StartCodeInterpreterSession",
+          "bedrock-agentcore:StopCodeInterpreterSession",
+          "bedrock-agentcore:GetCodeInterpreterSession",
+          "bedrock-agentcore:ListCodeInterpreterSessions",
+          "bedrock-agentcore:InvokeCodeInterpreter",
+        ],
+        resources: [`arn:aws:bedrock-agentcore:${region}:aws:code-interpreter/*`],
+      }),
     ];
     statements.forEach((statement) => role.addToPolicy(statement));
 
@@ -114,6 +127,8 @@ export class AgentHarnessStack extends Stack {
       executionRoleArn: role.roleArn,
       model: { bedrockModelConfig: { modelId: props.modelId, apiFormat: "converse_stream" } },
       systemPrompt: [{ text: props.systemPrompt }],
+      // Runs Python in a sandbox for calculations, data analysis and generated files.
+      tools: [{ type: "agentcore_code_interpreter", config: { agentCoreCodeInterpreter: {} } }],
       allowedTools: ["*"],
       truncation: { strategy: "sliding_window", config: { slidingWindow: { messagesCount: 150 } } },
       memory: { disabled: {} },

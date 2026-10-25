@@ -136,7 +136,9 @@ locally, but without the `/api` routes.
 
 The harness is defined in this repository and deployed as the `AgentHarness`
 CDK stack (`infra/lib/agent-harness-stack.ts`). It runs in eu-west-1, has no
-tools and no memory, and its runtime uses a `PUBLIC` network.
+memory, and its runtime uses a `PUBLIC` network. Its one added tool is the
+AWS-managed **Code Interpreter**, which runs Python in a sandbox, so the agent
+can calculate, analyse data and produce files instead of guessing.
 
 - **System prompt:** [`infra/harness/system-prompt.md`](infra/harness/system-prompt.md).
 - **Model and name:** `modelId` and `harnessName` in the git-ignored
