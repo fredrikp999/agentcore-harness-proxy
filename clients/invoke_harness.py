@@ -6,12 +6,12 @@
 """Send a message to an AgentCore harness and stream the reply.
 
 Usage:
-    uv run invoke_harness.py "Hello, who are you?"
-    uv run invoke_harness.py --harness-arn <arn> "Your message"
+    uv run clients/invoke_harness.py "Hello, who are you?"
+    uv run clients/invoke_harness.py --harness-arn <arn> "Your message"
 
-Uses the default AWS credentials (~/.aws/credentials). The region is taken
+Uses the default AWS credentials (aws login, or ~/.aws/credentials). The region is taken
 from the harness ARN. The default ARN is HARNESS_ARN, from the environment or
-from a .env file next to this script.
+from the .env file at the repository root.
 """
 import argparse
 import os
@@ -35,7 +35,8 @@ def load_dotenv(path: Path) -> None:
 
 
 def main():
-    load_dotenv(Path(__file__).with_name(".env"))
+    # .env lives at the repository root, one level up.
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("message", help="text to send to the harness")
     parser.add_argument(

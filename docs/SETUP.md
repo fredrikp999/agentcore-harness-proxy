@@ -5,7 +5,7 @@ placeholders for account ids, hostnames, tokens and team names. Keep real values
 out of this repository.
 
 For day-to-day usage see the [main README](../README.md). For the deploy
-commands see [`infra/README.md`](../infra/README.md). A diagram of the request
+commands see [`aws/README.md`](../aws/README.md) and [`cloudflare/README.md`](../cloudflare/README.md). A diagram of the request
 path is in [`architecture.html`](architecture.html). Problems met during setup,
 with fixes, are in [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md).
 
@@ -60,7 +60,7 @@ and buffering, and keeps the setup to one Lambda.
 Lambda function URLs reject requests whose `Host` header is not the function
 URL's own hostname. Cloudflare forwards the public hostname by default. Rewriting
 the Host header with an Origin Rule needs the Enterprise plan, so a small Worker
-(`infra/worker/`) makes the request to the function URL instead. `fetch` sets the
+(`cloudflare/worker/`) makes the request to the function URL instead. `fetch` sets the
 Host header from the target URL, and the reply streams straight back.
 
 The Worker also drops the service-token headers, so the Lambda only receives the
@@ -84,7 +84,9 @@ fails with an `AccessDeniedException` for `InvokeAgentRuntime`.
 ### The harness is managed here too, as its own stack
 
 A harness is configuration (model, prompt, tools, role), so it is defined in
-`infra/lib/agent-harness-stack.ts` and the prompt is a file in the repository.
+the repository: the agent in `agent/agent.ts` and `agent/system-prompt.md`, and
+how AWS provides it (harness, role, IAM per tool) in
+`aws/lib/agent-harness-stack.ts`.
 Changes are reviewed in pull requests and can be reproduced. It is a separate
 stack from the proxy because the prompt changes far more often than the proxy.
 The proxy reads the harness ARN from an SSM parameter, not a CloudFormation
@@ -94,7 +96,7 @@ only link between them.
 
 ### Infrastructure as code with CDK
 
-The stack is defined in `infra/` so the setup can be reviewed, repeated and
+The stacks are defined in `aws/` so the setup can be reviewed, repeated and
 changed through pull requests. The Worker is deployed with Wrangler. The
 Cloudflare Access application is created by hand in the dashboard and is not yet
 in code.
@@ -129,7 +131,7 @@ Deploys then assume those roles instead of using powerful credentials directly.
 4. **Deploy:**
 
    ```sh
-   cd infra
+   cd aws
    npm install
    cp deploy.local.example.json deploy.local.json   # team domain and AUD tag
    npx cdk deploy --all
@@ -138,7 +140,7 @@ Deploys then assume those roles instead of using powerful credentials directly.
    This deploys the `AgentHarness` stack, then the `HarnessProxy` stack. The
    settings can also be passed as `-c key=value`. The `FunctionUrl` output is the
    origin address.
-5. **Deploy the Worker:** from `infra/worker`, copy `wrangler.example.jsonc` to
+5. **Deploy the Worker:** build the UI in `cloudflare/web` (`npm install && npm run build`), then from `cloudflare/worker` copy `wrangler.example.jsonc` to
    `wrangler.jsonc`, set the hostname and the function URL (`ORIGIN`), then run
    `npx wrangler deploy`. It attaches to the hostname as a custom domain, which creates the DNS record, so delete any
    existing record for that name first. The Access application must cover that
@@ -147,7 +149,7 @@ Deploys then assume those roles instead of using powerful credentials directly.
    - Calling the function URL directly with no token returns `401`.
    - Calling the public hostname with no token returns an Access login or `403`.
    - Calling the public hostname with a valid service token streams a reply. The
-     repository's `invoke_proxy.py` does this (see the main README).
+     repository's `clients/invoke_proxy.py` does this (see `clients/README.md`).
 
 If a step fails, see [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md). It lists each
 error seen during this setup, with its cause.
@@ -168,13 +170,13 @@ are fixed and documented in the troubleshooting guide.
 | AWS access keys of any user | Secret. Avoid creating them where possible. |
 | Access AUD tag, team domain | Not secret, but pass them as `-c` context or CI variables rather than hard-coding. |
 | Function URL | Public by design. Protected by the JWT check. |
-| Account id, harness ARNs, your hostname | Low risk, but they describe your setup. They live in git-ignored files (`.env`, `infra/deploy.local.json`, `infra/worker/wrangler.jsonc`), with `*.example` templates in the repository. |
+| Account id, harness ARNs, your hostname | Low risk, but they describe your setup. They live in git-ignored files (`.env`, `aws/deploy.local.json`, `cloudflare/worker/wrangler.jsonc`), with `*.example` templates in the repository. |
 
 ## Updating
 
-Run `npx cdk deploy` from `infra/`. CDK shows the IAM and resource
+Run `npx cdk deploy` from `aws/`. CDK shows the IAM and resource
 changes first. Read them before confirming, especially any change to the role's
-permissions or to the JWT check in `infra/lambda/handler.ts`.
+permissions or to the JWT check in `aws/lambda/handler.ts`.
 
 ## Recommended next steps
 

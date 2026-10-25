@@ -3,7 +3,7 @@ import * as iam from "aws-cdk-lib/aws-iam";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import { Construct } from "constructs";
 
-/** The agent's definition, kept in infra/harness/agent.ts. */
+/** The agent's definition, kept in agent/agent.ts. */
 export interface AgentConfig {
   /** Name of the harness. It must be unique in the account and region. */
   name: string;

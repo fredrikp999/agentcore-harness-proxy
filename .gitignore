@@ -26,8 +26,8 @@ node_modules/
 .wrangler/
 
 # Local deployment settings (real hostnames, ids, ARNs); copy from the *.example files
-infra/deploy.local.json
-infra/worker/wrangler.jsonc
+aws/deploy.local.json
+cloudflare/worker/wrangler.jsonc
 
 # Terraform / CDK / build output
 .terraform/
@@ -41,4 +41,4 @@ build/
 *.log
 
 # Built web UI
-infra/worker/public/
+cloudflare/worker/public/

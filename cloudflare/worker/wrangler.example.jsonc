@@ -7,7 +7,7 @@
   "workers_dev": false,
   "preview_urls": false,
   "routes": [{ "pattern": "<your-hostname>", "custom_domain": true }],
-  // The web UI, built by `npm run build` in ../../web. /api/* always goes to the Worker.
+  // The web UI, built by `npm run build` in ../web. /api/* always goes to the Worker.
   "assets": { "directory": "./public", "run_worker_first": ["/api/*"] },
   // The Lambda function URL origin, from the stack's FunctionUrl output (no trailing slash).
   // Keeping it here means a plain `wrangler deploy` does not drop it.

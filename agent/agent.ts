@@ -1,11 +1,11 @@
-import type { AgentConfig } from "../lib/agent-harness-stack";
+import type { AgentConfig } from "../aws/lib/agent-harness-stack";
 
 // What the agent is. The system prompt is next to this file in system-prompt.md.
 // The AgentHarness stack turns this into the harness plus the IAM each enabled tool needs, so a
 // tool is turned on here and nowhere else. No secrets or account-specific values belong here:
 // this file is committed.
 export const agent: AgentConfig = {
-  // Part of the harness ARN. Changing it replaces the harness (see infra/README.md).
+  // Part of the harness ARN. Changing it replaces the harness (see README.md).
   name: "agent_harness",
   // A Bedrock inference profile id. List them with:
   //   aws bedrock list-inference-profiles --region eu-west-1 --query "inferenceProfileSummaries[].inferenceProfileId"

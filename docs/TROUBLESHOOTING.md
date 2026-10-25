@@ -34,7 +34,7 @@ response tells you which one rejected it.
 | `aws login` is not a valid command, or `aws configure list-profiles` prints nothing | The AWS CLI is older than 2.32, or no credentials have been set up on this machine yet. | Upgrade the CLI, then run `aws login`, or use `aws configure` with IAM user access keys. See [AWS credentials](../README.md#aws-credentials) in the README. |
 | `cdk deploy` finishes in about 3 seconds and changes nothing | The template and code were already deployed. | Nothing is wrong. Look for `Publishing Proxy/Code` and `deploying... [1/1]` when you expect a change. |
 | Tested right after `cdk deploy` and saw old behaviour | CloudFormation had not finished the update, or the deploy output was not read. | Wait for the `HarnessProxy` success line and the Outputs block before testing. |
-| `Failed to spawn: invoke_proxy.py` | `uv run` was started from a subfolder. | Run it from the repository root, where the script and `.env` are. |
+| `Failed to spawn: invoke_proxy.py` | The script path is relative to where `uv run` was started. | From the repository root run `uv run clients/invoke_proxy.py`. The scripts find the root `.env` from any folder. |
 | README said the harness used Sonnet, but it used Nova Micro | The harness had been changed in the console after it was created, so the docs drifted. | Read the real configuration (`get_harness` in the `bedrock-agentcore-control` API) before describing or recreating a harness. This is a reason to define it in the `AgentHarness` stack. |
 | Cannot find the Lambda log group | CDK named it itself, for example `<StackName>-ProxyLogs<hash>`, not `/aws/lambda/...`. | Open CloudWatch, then Log groups, and look for the stack name. The `/aws/bedrock-agentcore/runtimes/...` group belongs to the harness and is noisy (it restarts every few minutes). |
 
@@ -42,7 +42,7 @@ response tells you which one rejected it.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| No usable "Origin Rule" for the Host header | **Host header rewrite is Enterprise-only.** The option is greyed out on Free and leads to an upgrade page. | Use a Worker that calls the function URL. `fetch` sets Host from the target URL. See `infra/worker/`. |
+| No usable "Origin Rule" for the Host header | **Host header rewrite is Enterprise-only.** The option is greyed out on Free and leads to an upgrade page. | Use a Worker that calls the function URL. `fetch` sets Host from the target URL. See `cloudflare/worker/`. |
 | Opened Redirect Rules by mistake | Rules has several rule types. Redirect Rules send visitors elsewhere. | Not needed here. Do not create one. |
 | Worker custom domain will not attach | A DNS record with the same name already exists. | Delete the old record first. The custom domain creates its own. |
 
@@ -58,8 +58,8 @@ response tells you which one rejected it.
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `error code: 1010`, HTTP 403 | Cloudflare's Browser Integrity Check blocks the default `Python-urllib` User-Agent. It is not an Access error. | Send a custom `User-Agent`, as `invoke_proxy.py` does. |
-| The script prints an HTML login page | The HTTP client followed Access's redirect. | Do not follow redirects, so the real status is visible. `invoke_proxy.py` stops and explains. |
+| `error code: 1010`, HTTP 403 | Cloudflare's Browser Integrity Check blocks the default `Python-urllib` User-Agent. It is not an Access error. | Send a custom `User-Agent`, as `clients/invoke_proxy.py` does. |
+| The script prints an HTML login page | The HTTP client followed Access's redirect. | Do not follow redirects, so the real status is visible. `clients/invoke_proxy.py` stops and explains. |
 | `curl` output arrives all at once | Output buffering. | Use `curl -N`. |
 
 ### Worker
@@ -67,7 +67,7 @@ response tells you which one rejected it.
 | Symptom | Cause | Fix |
 |---|---|---|
 | Web UI shows `request failed (HTTP 500)` and the Harness list is empty; `wrangler tail` logs `ORIGIN is missing or not a URL` | `vars.ORIGIN` in `wrangler.jsonc` was still the `https://<function-url-host>` placeholder copied from `wrangler.example.jsonc`. An earlier deploy had passed the origin with `--var`, and a plain `wrangler deploy` replaced it with the placeholder. The Lambda log shows no request at all. | Set `vars.ORIGIN` to the stack's `FunctionUrl` output without the trailing slash and run `npx wrangler deploy`. |
-| `/` returns `{"error":"not found"}` (JSON) instead of the web UI | The deployed Worker predates the UI and forwards every path to the Lambda, which only knows the `/api/*` routes. A JSON 404 comes from the Lambda; the current Worker's own 404 is plain text. | Build the UI (`npm run build` in `web/`) and run `npx wrangler deploy` in `infra/worker`. |
+| `/` returns `{"error":"not found"}` (JSON) instead of the web UI | The deployed Worker predates the UI and forwards every path to the Lambda, which only knows the `/api/*` routes. A JSON 404 comes from the Lambda; the current Worker's own 404 is plain text. | Build the UI (`npm run build` in `cloudflare/web/`) and run `npx wrangler deploy` in `cloudflare/worker`. |
 | `error code: 1101`, HTTP 500 | The Worker threw an unhandled exception. Here `ORIGIN` was not set, so `new URL(undefined)` threw. | Set `vars.ORIGIN` in `wrangler.jsonc` (or pass `--var ORIGIN:...`). A `--var` given on one deploy is dropped by the next plain `wrangler deploy`, so keep it in the file. The Worker now answers `500 proxy misconfigured` and logs the reason. |
 | Worker forwards to another host | `new URL("//host/x", base)` treats the path as protocol-relative. | The Worker builds the target by concatenating onto the origin and rejects any result that leaves it. Keep that check. |
 | Worker reachable on a `workers.dev` address that Access does not protect | Wrangler enables `workers.dev` by default. | `workers_dev: false` and `preview_urls: false` in `wrangler.jsonc`. |
@@ -90,10 +90,10 @@ Do these before suspecting the code:
 - **Stack status and time:**
   `aws cloudformation describe-stacks --stack-name HarnessProxy --region <region> --query 'Stacks[0].[StackStatus,LastUpdatedTime]'`
 - **Values the stack was built with.** After `cdk synth` or `cdk deploy`,
-  `infra/cdk.out/HarnessProxy.template.json` holds the Lambda's environment
+  `aws/cdk.out/HarnessProxy.template.json` holds the Lambda's environment
   variables, such as the AUD and team domain it will run with.
 - **Whether a bundle has your latest code.** Search the newest folder in
-  `infra/cdk.out/` for a string you just added to a log message.
+  `aws/cdk.out/` for a string you just added to a log message.
 - **Lambda Last modified** in the Lambda console, against the time of your deploy.
 
 ## Things that worked well
@@ -111,7 +111,7 @@ Do these before suspecting the code:
 1. Bootstrap CDK as an administrator, once per account and region.
 2. Create the Access application, a person policy (Allow) and a service-token
    policy (**Service Auth**). Note the AUD tag and team domain.
-3. Deploy the stack with the AUD, team domain and harness ARNs from the git-ignored `infra/deploy.local.json` (or as `-c` context).
+3. Deploy the stack with the AUD, team domain and harness ARNs from the git-ignored `aws/deploy.local.json` (or as `-c` context).
 4. Grant the Lambda role `InvokeHarness` **and** `InvokeAgentRuntime` on the
    harness.
 5. Deploy the Worker with `vars.ORIGIN` set in `wrangler.jsonc`, with `workers_dev` off.

@@ -6,10 +6,10 @@
 """Send a message to the harness through the Cloudflare Access proxy and stream the reply.
 
 Usage:
-    uv run invoke_proxy.py "Hello, who are you?"
-    uv run invoke_proxy.py --session-id my-test-session-0000000000000000001 "Remember 7"
+    uv run clients/invoke_proxy.py "Hello, who are you?"
+    uv run clients/invoke_proxy.py --session-id my-test-session-0000000000000000001 "Remember 7"
 
-Settings come from the environment or a .env file next to this script:
+Settings come from the environment or the .env file at the repository root:
     PROXY_URL                 e.g. https://agenthelper.example.com/
     CF_ACCESS_CLIENT_ID       the service token's Client ID (ends in .access)
     CF_ACCESS_CLIENT_SECRET   the service token's Client Secret
@@ -57,7 +57,8 @@ def main():
     parser.add_argument("--max-tokens", type=int, help="maximum output tokens")
     args = parser.parse_args()
 
-    load_dotenv(Path(__file__).with_name(".env"))
+    # .env lives at the repository root, one level up.
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
     url = args.url or os.environ.get("PROXY_URL")
     client_id = os.environ.get("CF_ACCESS_CLIENT_ID")
     client_secret = os.environ.get("CF_ACCESS_CLIENT_SECRET")
