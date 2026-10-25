@@ -1,0 +1,40 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+    paths: [aws/**, agent/**, .github/workflows/deploy.yml]
+  workflow_dispatch:
+
+permissions:
+  id-token: write # for the OIDC token
+  contents: read
+
+concurrency: deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # The AWS role only trusts this environment. Give it required reviewers and a main-only branch rule.
+    environment: production
+    defaults:
+      run:
+        working-directory: aws
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: aws/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-west-1
+      - name: cdk deploy
+        run: |
+          npx cdk deploy --all --require-approval never \
+            -c accessTeamDomain="${{ vars.ACCESS_TEAM_DOMAIN }}" \
+            -c accessAud="${{ vars.ACCESS_AUD }}"

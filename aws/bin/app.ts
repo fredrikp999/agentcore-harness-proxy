@@ -38,6 +38,17 @@ function required(key: string): string {
   return value;
 }
 
+/** Reserved concurrency for the proxy Lambda: a whole number, or "off" to not reserve any. */
+function reservedConcurrency(): number | undefined {
+  const value = setting("reservedConcurrency") ?? 10;
+  if (value === "off") return undefined;
+  const count = Number(value);
+  if (!Number.isInteger(count) || count < 1) {
+    throw new Error('"reservedConcurrency" must be a whole number of 1 or more, or "off"');
+  }
+  return count;
+}
+
 /** Harnesses that already exist outside this app, as name -> ARN. Optional. */
 function externalHarnessArns(): Record<string, string> {
   let value = setting("harnessArns");
@@ -73,6 +84,7 @@ const proxy = new HarnessProxyStack(app, "HarnessProxy", {
   accessTeamDomain: required("accessTeamDomain"),
   accessAud: required("accessAud"),
   harnessArns: externalHarnessArns(),
+  reservedConcurrency: reservedConcurrency(),
   managedHarness: { alias: optional("harnessAlias", "managed"), arnParameterName: harness.arnParameterName },
 });
 // Deploy the harness (and its SSM parameter) before the proxy that reads it.

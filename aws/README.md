@@ -34,7 +34,8 @@ npx cdk deploy --all    # AgentHarness first, then HarnessProxy
 ```
 
 `deploy.local.json` is git-ignored and holds `accessTeamDomain` and `accessAud`
-(required), and optionally `harnessArns`. Any setting can also be given as
+(required), and optionally `harnessArns` and `reservedConcurrency` (default 10, or
+`"off"`; see [rate limiting](../docs/SETUP.md#rate-limiting)). Any setting can also be given as
 `-c key=value`, which wins over the file. The agent itself is defined in the
 committed [`../agent/agent.ts`](../agent/agent.ts), not here. You can deploy one
 stack alone with `npx cdk deploy AgentHarness` or `npx cdk deploy HarnessProxy`.
@@ -134,6 +135,11 @@ A harness created by hand is not managed by this stack. To switch:
    `npx cdk deploy HarnessProxy`. `managed` is now the default.
 4. Set `HARNESS_ARN` in `.env` to the new ARN (the `HarnessArn` output), then
    delete the old harness in the console.
+
+## Deploying from GitHub Actions
+
+`github-oidc.template.yaml` creates the OIDC roles for `.github/workflows`; see
+[automated deploys](../docs/SETUP.md#automated-deploys-from-github-actions).
 
 ## Notes
 

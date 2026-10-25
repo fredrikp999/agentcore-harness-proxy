@@ -121,6 +121,47 @@ changed through pull requests. The Worker is deployed with Wrangler. The
 Cloudflare Access application is created by hand in the dashboard and is not yet
 in code.
 
+### Rate limiting
+
+The function URL is public, so two limits cap what a flood of requests can cost:
+
+- **Cloudflare**, in front: a rate-limiting rule on `/api/*` of the hostname
+  (`cloudflare/rate-limit/apply.sh`), 30 requests per 10 seconds per IP by
+  default. Blocked requests never reach the Worker or Lambda.
+- **Lambda**, behind: reserved concurrency of 10 (`reservedConcurrency`, or
+  `"off"`). Excess requests get a 429 from Lambda. Reserving needs the account's
+  concurrency limit to stay at 10 or more unreserved, so on a new account with the
+  default limit of 10 the deploy fails until you request a quota increase (or set
+  `"off"`).
+
+### Automated deploys from GitHub Actions
+
+No deploy keys: GitHub Actions gets short-lived credentials through OIDC.
+`aws/github-oidc.template.yaml` is deployed once by an administrator and creates
+two roles, both able to do nothing except assume CDK bootstrap roles:
+
+| Role | Trusted for | Can assume | Used by |
+|---|---|---|---|
+| `github-cdk-deploy` | this repository, GitHub environment `production` only | the CDK deploy, file/image publishing and lookup roles | `.github/workflows/deploy.yml` on push to `main` |
+| `github-cdk-diff` | this repository, `pull_request` runs | the CDK lookup role only (read-only) | `.github/workflows/cdk-diff.yml` |
+
+The diff role is read-only because a pull request can change the code that
+`cdk synth` runs. Only the protected environment can deploy. Setup:
+
+1. As an administrator: `aws cloudformation deploy --stack-name GithubOidcDeploy
+   --template-file aws/github-oidc.template.yaml --capabilities CAPABILITY_NAMED_IAM
+   --region eu-west-1 --parameter-overrides GitHubRepo=<owner>/<repo>`. Add
+   `CreateOidcProvider=false` if the account already has the GitHub provider.
+2. In the repository settings, add the variables `AWS_DEPLOY_ROLE_ARN` and
+   `AWS_DIFF_ROLE_ARN` (the stack outputs), `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`.
+   None are secret.
+3. Create the environment `production` with required reviewers and a deployment
+   branch rule limited to `main`. The branch rule is what keeps other branches
+   from deploying: the role trusts the environment, not the branch.
+
+The workflows deploy the CDK stacks only. The Worker is still deployed with
+Wrangler.
+
 ### Deploying through the CDK bootstrap roles
 
 `cdk bootstrap` created the CDK roles, bucket and repository in the account.
@@ -204,13 +245,6 @@ permissions or to the JWT check in `aws/lambda/handler.ts`.
 
 These are not done yet.
 
-- **Rate limiting:** add a Cloudflare rate-limiting rule on the hostname, and set
-  reserved concurrency on the Lambda. The function URL is public, so this limits
-  the cost of a flood of requests.
-- **Automated deploys:** deploy from GitHub Actions using OIDC, with a role that
-  can only assume the CDK roles and is limited to this repository and a
-  protected environment. Run `cdk diff` on pull requests. This removes the need
-  for any deploy keys.
 - **Account hygiene:** enable MFA on every IAM user, remove users that are not
   used, and use `aws login` (or IAM Identity Center) so that command-line access
   uses short-lived credentials instead of long-lived access keys.

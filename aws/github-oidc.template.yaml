@@ -1,0 +1,98 @@
+# Lets GitHub Actions deploy without stored keys. Deploy it once, as an administrator (CloudShell works):
+#
+#   aws cloudformation deploy --stack-name GithubOidcDeploy --template-file github-oidc.template.yaml \
+#     --capabilities CAPABILITY_NAMED_IAM --region eu-west-1 \
+#     --parameter-overrides GitHubRepo=<owner>/<repo>
+#
+# Both roles can only assume the CDK bootstrap roles. CloudFormation, not these roles, makes the changes.
+AWSTemplateFormatVersion: "2010-09-09"
+Description: GitHub Actions OIDC roles that can only assume the CDK bootstrap roles
+
+Parameters:
+  GitHubRepo:
+    Type: String
+    Description: owner/repo allowed to assume the roles
+    AllowedPattern: ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$
+  DeployEnvironment:
+    Type: String
+    Default: production
+    Description: GitHub environment the deploy job must run in. Protect it with required reviewers and a main-only branch rule.
+  CreateOidcProvider:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Set to false if the account already has the token.actions.githubusercontent.com provider
+  CdkQualifier:
+    Type: String
+    Default: hnb659fds
+
+Conditions:
+  CreateProvider: !Equals [!Ref CreateOidcProvider, "true"]
+
+Resources:
+  Provider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateProvider
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: github-cdk-deploy
+      Description: cdk deploy from the protected GitHub environment
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubRepo}:environment:${DeployEnvironment}"
+      Policies:
+        - PolicyName: AssumeCdkRoles
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource:
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${CdkQualifier}-deploy-role-${AWS::AccountId}-${AWS::Region}"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${CdkQualifier}-file-publishing-role-${AWS::AccountId}-${AWS::Region}"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${CdkQualifier}-image-publishing-role-${AWS::AccountId}-${AWS::Region}"
+                  - !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${CdkQualifier}-lookup-role-${AWS::AccountId}-${AWS::Region}"
+
+  DiffRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: github-cdk-diff
+      Description: cdk diff on pull requests. Read-only (the CDK lookup role) because a pull request can change the code that runs.
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com"
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Sub "repo:${GitHubRepo}:pull_request"
+      Policies:
+        - PolicyName: AssumeCdkLookupRole
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !Sub "arn:${AWS::Partition}:iam::${AWS::AccountId}:role/cdk-${CdkQualifier}-lookup-role-${AWS::AccountId}-${AWS::Region}"
+
+Outputs:
+  DeployRoleArn:
+    Value: !GetAtt DeployRole.Arn
+  DiffRoleArn:
+    Value: !GetAtt DiffRole.Arn

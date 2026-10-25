@@ -1,0 +1,39 @@
+name: CDK diff
+
+on:
+  pull_request:
+    paths: [aws/**, agent/**, .github/workflows/cdk-diff.yml]
+
+permissions:
+  id-token: write # for the OIDC token
+  contents: read
+
+jobs:
+  diff:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aws
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: aws/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DIFF_ROLE_ARN }}
+          aws-region: eu-west-1
+      - name: cdk diff
+        run: |
+          set -o pipefail
+          {
+            echo '```'
+            npx cdk diff --all \
+              -c accessTeamDomain="${{ vars.ACCESS_TEAM_DOMAIN }}" \
+              -c accessAud="${{ vars.ACCESS_AUD }}" 2>&1
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
