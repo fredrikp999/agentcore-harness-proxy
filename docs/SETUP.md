@@ -158,7 +158,9 @@ The diff role is read-only because a pull request can change the code that
    `fredrikp999@24974179/agentcore-harness-proxy@1433222607`).
 2. In the repository settings, add the variables `AWS_DEPLOY_ROLE_ARN` and
    `AWS_DIFF_ROLE_ARN` (the stack outputs), `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD`.
-   None are secret.
+   None are secret. Optionally add `RESERVED_CONCURRENCY` (a number, or `off`); the
+   workflows can't read `aws/deploy.local.json`, so this is how CI sets it. If
+   the account's Lambda limit is still 10, use `off` or the deploy fails.
 3. Create the environment `production` with required reviewers and a deployment
    branch rule limited to `main`. The branch rule is what keeps other branches
    from deploying: the role trusts the environment, not the branch.

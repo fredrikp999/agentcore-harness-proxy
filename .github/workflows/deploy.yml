@@ -37,4 +37,5 @@ jobs:
         run: |
           npx cdk deploy --all --require-approval never \
             -c accessTeamDomain="${{ vars.ACCESS_TEAM_DOMAIN }}" \
-            -c accessAud="${{ vars.ACCESS_AUD }}"
+            -c accessAud="${{ vars.ACCESS_AUD }}" \
+            -c reservedConcurrency="${{ vars.RESERVED_CONCURRENCY }}"

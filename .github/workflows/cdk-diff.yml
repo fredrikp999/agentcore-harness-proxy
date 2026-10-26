@@ -34,6 +34,7 @@ jobs:
             echo '```'
             npx cdk diff --all \
               -c accessTeamDomain="${{ vars.ACCESS_TEAM_DOMAIN }}" \
-              -c accessAud="${{ vars.ACCESS_AUD }}" 2>&1
+              -c accessAud="${{ vars.ACCESS_AUD }}" \
+            -c reservedConcurrency="${{ vars.RESERVED_CONCURRENCY }}" 2>&1
             echo '```'
           } | tee -a "$GITHUB_STEP_SUMMARY"
