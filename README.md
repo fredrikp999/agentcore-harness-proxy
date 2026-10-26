@@ -17,9 +17,21 @@ Each folder is one thing you change or deploy, with its own README:
 | [`clients/`](clients/README.md) | Scripts that call the agent, directly or through the proxy. | — |
 | [`docs/`](docs/) | Architecture diagram, setup decisions, troubleshooting. | — |
 
+## Local settings
+
 Values tied to your setup (hostname, Access settings, account id, tokens) live
-only in git-ignored files: `.env`, `aws/deploy.local.json` and
-`cloudflare/worker/wrangler.jsonc`, each copied from an `*.example` file.
+only in git-ignored files, each copied from an `*.example` template. Each tool
+reads its own file, so check this list before the step that needs it:
+
+| File (git-ignored) | Copy from | Holds | Needed for |
+|---|---|---|---|
+| `aws/deploy.local.json` | `aws/deploy.local.example.json` | Access team domain and AUD tag; optionally `harnessArns`, `reservedConcurrency` | Step 2, `cdk deploy` |
+| `cloudflare/worker/wrangler.jsonc` | `cloudflare/worker/wrangler.example.jsonc` | your hostname and the `FunctionUrl` from step 2 | Step 3, `wrangler deploy` |
+| `.env` | `.env.example` | **secret:** Access service token; proxy URL and `HARNESS_ARN` | Step 4, the `clients/` scripts |
+| GitHub repository variables | (not a file) | `AWS_DEPLOY_ROLE_ARN`, `AWS_DIFF_ROLE_ARN`, `ACCESS_TEAM_DOMAIN`, `ACCESS_AUD` | optional, [automated deploys](docs/SETUP.md#automated-deploys-from-github-actions) |
+
+Only `.env` holds a secret. The team domain and AUD tag appear in both
+`aws/deploy.local.json` and the GitHub variables, so keep them the same.
 
 ## Quick start
 
