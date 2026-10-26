@@ -173,6 +173,28 @@ environment. This was set up and tested with the diff role; see
 The workflows deploy the CDK stacks only. The Worker is still deployed with
 Wrangler.
 
+### Before making the repository public
+
+The deploy role only trusts the `production` environment, but a pull request runs
+the workflow file from its own branch, and the diff role trusts any `pull_request`
+run in the repository. The diff role can only assume the read-only CDK lookup role,
+and GitHub does not give OIDC tokens to fork pull requests. These settings keep it
+that way:
+
+1. Settings -> Actions -> General -> Fork pull request workflows: require approval
+   for all outside collaborators. Leave "Send write tokens" and "Send secrets and
+   variables" to fork pull requests off.
+2. Same page, Workflow permissions: read repository contents by default. The
+   workflows ask for `id-token: write` themselves.
+3. Protect `main` (Settings -> Rules): require a pull request with one approval,
+   require review from Code Owners, block force pushes.
+   [`.github/CODEOWNERS`](../.github/CODEOWNERS) makes the owner review any change
+   to the workflows, the OIDC template and the CDK code.
+4. Environment `production`: required reviewers, and deployment branches limited
+   to `main`.
+5. Keep write access to people you trust: it is what lets someone open a pull
+   request that uses the diff role.
+
 ### Deploying through the CDK bootstrap roles
 
 `cdk bootstrap` created the CDK roles, bucket and repository in the account.
