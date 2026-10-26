@@ -1,0 +1,6 @@
+# Changes here decide who can deploy or what runs in CI. With "Require review from Code Owners"
+# on the main branch ruleset, they need the owner's approval.
+/.github/                       @fredrikp999
+/aws/github-oidc.template.yaml  @fredrikp999
+/aws/bin/                       @fredrikp999
+/aws/lib/                       @fredrikp999
