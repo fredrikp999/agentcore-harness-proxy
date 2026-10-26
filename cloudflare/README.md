@@ -54,6 +54,18 @@ DNS record itself. Delete any existing CNAME for that name first. Cloudflare
 Access must protect that hostname, so the Worker only sees requests that already
 carry a valid token.
 
+## Rate limiting
+
+```sh
+CLOUDFLARE_API_TOKEN=... ZONE_ID=... HOSTNAME=<your-hostname> cloudflare/rate-limit/apply.sh
+```
+
+Blocks an IP for 10 seconds after more than 30 requests to `/api/*` in 10 seconds
+(`LIMIT=` changes the number; the window fits the Free plan). The token needs
+Zone WAF Edit. The script replaces the zone's whole rate-limiting ruleset, so check
+the dashboard first if the zone already has rules. The same rule can be created in
+the dashboard under Security -> WAF -> Rate limiting rules.
+
 ## Web UI
 
 Open `https://<your-hostname>/` in a browser and sign in through Cloudflare

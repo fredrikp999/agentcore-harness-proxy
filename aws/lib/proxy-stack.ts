@@ -19,6 +19,13 @@ export interface HarnessProxyStackProps extends StackProps {
    * offered under `alias`. It is listed after `harnessArns`, so it is the default only when that is empty.
    */
   managedHarness?: { alias: string; arnParameterName: string };
+  /**
+   * Most concurrent invocations of the function. The function URL is public, so this caps what a
+   * flood of requests can cost; requests beyond it get a 429 from Lambda. Reserving needs the
+   * account's concurrency limit to stay at 10 or more unreserved, so it can fail on a new account.
+   * Leave undefined to not reserve.
+   */
+  reservedConcurrency?: number;
 }
 
 export class HarnessProxyStack extends Stack {
@@ -40,6 +47,7 @@ export class HarnessProxyStack extends Stack {
       architecture: lambda.Architecture.ARM_64,
       memorySize: 256,
       timeout: Duration.seconds(150),
+      reservedConcurrentExecutions: props.reservedConcurrency,
       logGroup: new logs.LogGroup(this, "ProxyLogs", { retention: logs.RetentionDays.ONE_MONTH }),
       environment: {
         ACCESS_TEAM_DOMAIN: props.accessTeamDomain,
