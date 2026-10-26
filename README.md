@@ -12,7 +12,7 @@ Each folder is one thing you change or deploy, with its own README:
 | Folder | What it is | Deployed with |
 |---|---|---|
 | [`agent/`](agent/README.md) | What the agent is: model, tools, MCP servers, limits, system prompt. Edit this most often. | `cdk deploy` in `aws/` |
-| [`aws/`](aws/README.md) | CDK app: the harness, its execution role, and the Lambda proxy. | `npx cdk deploy` |
+| [`aws/`](aws/README.md) | CDK app: the harness, its execution role, and the Lambda proxy. | `npx cdk deploy`, or GitHub Actions ([setup](docs/SETUP.md#automated-deploys-from-github-actions)) |
 | [`cloudflare/`](cloudflare/README.md) | The Access setup, the edge Worker, and the chat UI it serves. | `npx wrangler deploy` |
 | [`clients/`](clients/README.md) | Scripts that call the agent, directly or through the proxy. | — |
 | [`docs/`](docs/) | Architecture diagram, setup decisions, troubleshooting. | — |

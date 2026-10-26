@@ -86,6 +86,8 @@ response tells you which one rejected it.
 | `401` with `access jwt missing` | The `Cf-Access-Jwt-Assertion` header did not arrive. | Check the Access application covers the hostname. Check the Worker forwards headers. |
 | Client sees `502` and `error code: 502`, Lambda log shows `AccessDeniedException ... is not authorized to perform: bedrock-agentcore:InvokeAgentRuntime on resource: ...harness/...` | **`InvokeHarness` is also authorized as `InvokeAgentRuntime` on the harness ARN.** The role had only `InvokeHarness`. | Grant both actions on the harness ARN. If a later error names another resource, add exactly that. |
 | Unsure if `runtimeUserId` is needed | The working script does not send it. Sending the service token's client id (it contains a dot) was an unneeded variable. | Not sent. Add it back only with a reason, and test it. |
+| GitHub Actions: `Source Account ID is needed if the Role Name is provided and not the Role Arn` | The `AWS_DEPLOY_ROLE_ARN` or `AWS_DIFF_ROLE_ARN` variable holds the role name. | Set it to the full ARN, from the `GithubOidcDeploy` stack outputs. |
+| GitHub Actions: `Not authorized to perform sts:AssumeRoleWithWebIdentity`, though the role's trust policy names the right repository | Newer GitHub accounts put numeric ids in the token subject, e.g. `repo:<owner>@<id>/<repo>@<id>:pull_request`, so `repo:<owner>/<repo>:...` never matches. | Print the token's `sub` (decode the token from `ACTIONS_ID_TOKEN_REQUEST_URL` in a step), then redeploy the stack with `GitHubSubjectRepo=<owner>@<id>/<repo>@<id>`. "Re-run jobs" replays the old commit, so check the run for the newest one. |
 
 ## Checking what is deployed
 

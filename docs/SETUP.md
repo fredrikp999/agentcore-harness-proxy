@@ -163,6 +163,11 @@ The diff role is read-only because a pull request can change the code that
    branch rule limited to `main`. The branch rule is what keeps other branches
    from deploying: the role trusts the environment, not the branch.
 
+With this done, a pull request shows its `cdk diff` in the check's job summary,
+and merging to `main` deploys after a reviewer approves the `production`
+environment. This was set up and tested with the diff role; see
+[the troubleshooting guide](TROUBLESHOOTING.md) for the two login errors seen.
+
 The workflows deploy the CDK stacks only. The Worker is still deployed with
 Wrangler.
 
