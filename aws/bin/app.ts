@@ -40,7 +40,8 @@ function required(key: string): string {
 
 /** Reserved concurrency for the proxy Lambda: a whole number, or "off" to not reserve any. */
 function reservedConcurrency(): number | undefined {
-  const value = setting("reservedConcurrency") ?? 10;
+  // An empty value (an unset CI variable) means the default.
+  const value = setting("reservedConcurrency") || 10;
   if (value === "off") return undefined;
   const count = Number(value);
   if (!Number.isInteger(count) || count < 1) {
